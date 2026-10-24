@@ -1,0 +1,146 @@
+/* Size-adjusted fallbacks, so text doesn't jump when the web fonts arrive. Values from the fonts'
+   metrics (Capsize): size-adjust = average character width ratio; ascent/descent scaled to match. */
+@font-face { font-family: 'Jost Fallback'; src: local('Arial'); size-adjust: 96%; ascent-override: 111.4%; descent-override: 39.1%; line-gap-override: 0%; }
+@font-face { font-family: 'Young Serif Fallback'; src: local('Georgia'); size-adjust: 114.6%; ascent-override: 91.2%; descent-override: 31.9%; line-gap-override: 0%; }
+
+/* ChopWise design tokens (docs/design-strategy.md §2, §4, §5, §7).
+   Every colour, radius, shadow, duration and easing used by the app lives here. Components refer
+   to these names only. Colours are OKLCH; each is defined once with light-dark(), and the theme is
+   chosen by color-scheme: the system setting, or a saved choice set as data-theme on <html>
+   (public/theme-init.js applies it before the page paints, so there is no flash).
+   Contrast pairs are checked by `npm run test:contrast`. */
+
+:root { color-scheme: light dark; }
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
+
+:root {
+  /* Surfaces: bakery counter by day, speakeasy by night */
+  --surface: light-dark(oklch(0.97 0.015 75), oklch(0.15 0.02 45));
+  /* Light: the page's own cream (hue 70–75), about three shades deeper, so cards sit on it in the same family. */
+  --surface-raised: light-dark(oklch(86.636% 0.08338 69.858), oklch(0.2 0.025 45));
+  --surface-sunken: light-dark(oklch(0.94 0.02 78), oklch(0.12 0.018 45));
+  --surface-float: light-dark(oklch(0.985 0.01 75), oklch(0.22 0.025 45));
+
+  /* Text */
+  --ink: light-dark(oklch(0.22 0.035 45), oklch(0.95 0.015 75));
+  --ink-muted: light-dark(oklch(0.45 0.03 50), oklch(0.75 0.02 70));
+
+  /* Lines */
+  --rule: light-dark(oklch(0.22 0.035 45 / 0.14), oklch(0.95 0.015 75 / 0.12));
+  --field-border: light-dark(oklch(0.58 0.03 55), oklch(0.55 0.02 60));
+
+  /* Action: terracotta by day, gold by night. Text on it: 5.3:1 light, 10.0:1 dark. */
+  --action: light-dark(oklch(0.49 0.13 50), oklch(0.82 0.07 85));
+  --action-hover: light-dark(oklch(0.44 0.13 50), oklch(0.87 0.07 85));
+  --on-action: light-dark(oklch(0.97 0.015 75), oklch(0.22 0.035 45));
+  --action-tint: light-dark(oklch(0.58 0.14 55), oklch(0.58 0.12 55));
+  --accent: light-dark(oklch(0.52 0.13 50), oklch(0.82 0.07 85));
+
+  /* Fit states (§6): each also has its own shape and word. Text on surface and on its wash ≥ 4.5:1. */
+  --fit-balanced: light-dark(oklch(0.47 0.09 140), oklch(0.8 0.09 140));
+  --fit-balanced-wash: light-dark(oklch(0.94 0.035 140), oklch(0.26 0.04 140));
+  --fit-recommended: light-dark(oklch(0.46 0.1 265), oklch(0.8 0.08 265));
+  --fit-recommended-wash: light-dark(oklch(0.94 0.03 265), oklch(0.26 0.04 265));
+  --fit-caution: light-dark(oklch(0.48 0.1 70), oklch(0.82 0.11 80));
+  --fit-caution-wash: light-dark(oklch(0.95 0.04 85), oklch(0.27 0.04 80));
+  --fit-restricted: light-dark(oklch(0.46 0.13 30), oklch(0.76 0.1 30));
+  --fit-restricted-wash: light-dark(oklch(0.94 0.03 30), oklch(0.26 0.04 30));
+
+  /* Messages reuse the Fit hues so meaning stays consistent */
+  --success: var(--fit-balanced);
+  --warning: var(--fit-caution);
+  --warning-wash: var(--fit-caution-wash);
+  --danger: var(--fit-restricted);
+  --danger-wash: var(--fit-restricted-wash);
+
+  /* Intake bands */
+  --band-low: var(--fit-balanced);
+  --band-moderate: var(--fit-recommended);
+  --band-high: var(--fit-caution);
+  --band-critical: var(--fit-restricted);
+
+  /* Overlays and depth: tinted shadows by day; by night, lighter surfaces and a top highlight */
+  --scrim: light-dark(oklch(0.22 0.035 45 / 0.45), oklch(0.05 0.01 45 / 0.65));
+  --shadow-tint: light-dark(oklch(0.22 0.035 45 / 0.16), oklch(0 0 0 / 0));
+  --shadow-tint-soft: light-dark(oklch(0.22 0.035 45 / 0.06), oklch(0 0 0 / 0));
+  --edge-highlight: light-dark(oklch(1 0 0 / 0), oklch(0.95 0.015 75 / 0.06));
+  --shadow-card: 0 1px 2px var(--shadow-tint-soft), 0 12px 32px -12px var(--shadow-tint), inset 0 1px 0 var(--edge-highlight);
+  --shadow-lift: 0 2px 4px var(--shadow-tint-soft), 0 24px 48px -16px var(--shadow-tint), inset 0 1px 0 var(--edge-highlight);
+
+  /* Type (§4) */
+  --font-display: 'Young Serif', 'Young Serif Fallback', Georgia, serif;
+  --font-sans: 'Jost', 'Jost Fallback', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --text-display-xl: clamp(2.5rem, 1.6rem + 3.6vw, 4.5rem);
+  --text-display-l: clamp(1.75rem, 1.3rem + 1.8vw, 2.75rem);
+  --text-title: clamp(1.25rem, 1.15rem + 0.4vw, 1.5rem);
+  --text-title-s: 1.125rem;
+  --text-price: clamp(1.125rem, 1.08rem + 0.2vw, 1.25rem);
+  --text-body: 1rem;
+  --text-meta: 0.875rem;
+  --text-label: 0.8125rem;
+
+  /* Space (4-based) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+  --space-9: 7rem;
+  /* Card grids on laptops and desktops (design strategy §3): auto-fill columns of at least these widths. */
+  --grid-gap: var(--space-5);
+  --card-min: 16.25rem;        /* 260 px: about 3 menu columns at 1280 px, 4 at 1440 px */
+  --order-card-min: 21rem;     /* My orders: 2–3 columns */
+  --board-col-min: 15rem;      /* caterer order board: one column per status */
+  /* Categorical chart colours for the five food classes (dataviz reference slots 1–5, validated
+     for colour-blind separation on --surface-raised in both themes). Always shown with a legend. */
+  --chart-1: light-dark(#2a78d6, #3987e5);
+  --chart-2: light-dark(#eb6834, #d95926);
+  --chart-3: light-dark(#1baf7a, #199e70);
+  --chart-4: light-dark(#eda100, #c98500);
+  --chart-5: light-dark(#e87ba4, #d55181);
+  --gutter: clamp(1rem, 0.6rem + 1.6vw, 1.5rem);
+  --page-max: 80rem;
+  --tap: 2.75rem; /* 44 px minimum touch target */
+
+  /* Radii (§5): images 20; cards that wrap an image with 8 px padding 28; pills for controls */
+  --radius-image: 20px;
+  --radius-card: 28px;
+  --radius-field: 12px;
+  --radius-small: 12px;
+  --radius-pill: 999px;
+
+  /* Motion (§7). JavaScript reads these through src/motion.js. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-press: 120ms;
+  --dur-fast: 180ms;
+  --dur-base: 240ms;
+  --dur-sheet: 280ms;
+  --dur-exit: 200ms;
+  --press-card: 0.96;
+  --press-button: 0.97;
+
+  /* Layers */
+  --z-sticky: 10;
+  --z-popover: 20;
+  --z-scrim: 30;
+  --z-sheet: 31;
+  --z-toast: 40;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0ms;
+    --dur-fast: 120ms;
+    --dur-base: 120ms;
+    --dur-sheet: 150ms;
+    --dur-exit: 120ms;
+    --press-card: 1;
+    --press-button: 1;
+  }
+}

@@ -1,0 +1,5 @@
+node_modules/
+.env
+*.log
+# Uploaded dish photos (generated at run time, never committed)
+uploads/
