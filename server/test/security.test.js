@@ -362,3 +362,20 @@ test('db:setup refuses to wipe a database that is not on this computer (such as 
   assert.equal(r.status, 1);
   assert.match(r.stderr, /points to ep-example\.neon\.tech, not this computer, so it stopped/);
 });
+
+test('CLIENT_ORIGIN falls back to Render\'s RENDER_EXTERNAL_URL; in production one of them is required', async () => {
+  const { clientOrigin } = await import('../src/config.js');
+  const saved = { o: process.env.CLIENT_ORIGIN, r: process.env.RENDER_EXTERNAL_URL, n: process.env.NODE_ENV };
+  try {
+    delete process.env.CLIENT_ORIGIN;
+    process.env.RENDER_EXTERNAL_URL = 'https://chopwise.onrender.com/';
+    assert.equal(clientOrigin(), 'https://chopwise.onrender.com');
+    process.env.CLIENT_ORIGIN = 'https://chopwise.example.ng';
+    assert.equal(clientOrigin(), 'https://chopwise.example.ng', 'an explicit CLIENT_ORIGIN wins');
+    delete process.env.CLIENT_ORIGIN; delete process.env.RENDER_EXTERNAL_URL; process.env.NODE_ENV = 'production';
+    assert.throws(() => clientOrigin(), /Set CLIENT_ORIGIN .*host's environment settings/);
+  } finally {
+    process.env.CLIENT_ORIGIN = saved.o; process.env.NODE_ENV = saved.n;
+    if (saved.r === undefined) delete process.env.RENDER_EXTERNAL_URL; else process.env.RENDER_EXTERNAL_URL = saved.r;
+  }
+});

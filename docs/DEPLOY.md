@@ -27,7 +27,7 @@ never commit it, never paste it into chats or screenshots, and change it if it l
 |---|---|---|
 | `NODE_ENV` | no | `production` (set by `render.yaml`). Turns on Secure cookies, HTTPS upgrades and the proxy settings. |
 | `NODE_VERSION` | no | `22` (set by `render.yaml`). |
-| `CLIENT_ORIGIN` | no | The site's own address, e.g. `https://chopwise.onrender.com`. No trailing slash. Cookies, CORS, the Origin check and Paystack's return link all use it. |
+| `CLIENT_ORIGIN` | no | The site's own address, e.g. `https://chopwise.onrender.com`. No trailing slash. Cookies, CORS, the Origin check and Paystack's return link all use it. On Render you may leave it out: the server then uses `RENDER_EXTERNAL_URL`, which Render sets for every web service. Set it if you add a custom domain. |
 | `DATABASE_URL` | **yes** | Neon's connection string, ending in `?sslmode=require` (see §2). It contains the database password. |
 | `JWT_SECRET` | **yes** | Random, at least 32 characters. `render.yaml` asks Render to generate it. Changing it signs everyone out. |
 | `DELIVERY_CODE_KEY` | **yes** | 64 hex characters. Generate once with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. **Never change it after launch**: orders' delivery codes are encrypted with it. |

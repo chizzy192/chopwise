@@ -10,7 +10,7 @@ jwtSecret();
 clientOrigin();
 paystackSecret();
 deliveryCodeKey();
-if (isProduction() && !process.env.DATABASE_URL) throw new Error('Set DATABASE_URL (the Neon connection string)');
+if (isProduction() && !process.env.DATABASE_URL) throw new Error("Set DATABASE_URL in the host's environment settings to the Neon connection string");
 
 // Serve the built React app in production.
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../client/dist');
