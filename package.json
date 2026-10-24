@@ -1,0 +1,15 @@
+{
+  "name": "chopwise",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ChopWise: diet control food delivery for UNN staff. One web service: Express serves the API and the built React client.",
+  "scripts": {
+    "build": "npm ci --prefix client --include=dev && npm run build --prefix client && npm ci --prefix server --omit=dev",
+    "start": "npm start --prefix server",
+    "db:migrate": "npm run db:migrate --prefix server",
+    "db:seed": "npm run db:seed --prefix server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

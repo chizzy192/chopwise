@@ -36,21 +36,14 @@ test('landing: explains ChopWise, runs the gate demo, and links to log in and si
   await expect(page.locator('.demo-meal').filter({ hasText: 'Jollof' })).toContainText('Careful');
   await expect(page.locator('.demo-meal').filter({ hasText: 'Balanced lunch' })).toContainText('Balanced');
   await expect(page.locator('.demo-meal').filter({ hasText: 'Pepper soup' })).toContainText('Good for you right now');
-  // Outside "How it works in detail", no technical terms.
+  // Plain words only: no technical terms anywhere on the page (tooltips aside).
   const plain = await page.locator('main').evaluate((el) => {
     const copy = el.cloneNode(true);
-    copy.querySelector('details')?.remove();
     copy.querySelectorAll('.term-tip').forEach((t) => t.remove());
     return copy.textContent;
   });
   expect(plain).not.toMatch(/\bRDI\b|\bG = |\bP1\b|\bP2\b|\bH = |Recommended\b/);
-  // The technical detail for supervisors and examiners, behind a toggle.
-  const detail = page.getByText('How it works in detail');
-  await expectClickable(detail);
-  await detail.click();
-  await expect(page.locator('.tech-details')).toContainText('G = H·P1 + H·P2 + P1·P2');
-  await expect(page.locator('.tech-details')).toContainText('Recommended Daily Intake (RDI)');
-  await expect(page.locator('.tech-details .formula')).toContainText('= 0');
+  await expect(page.getByText('How it works in detail'), 'the detail section was removed').toHaveCount(0);
   const why = page.getByRole('button', { name: /Careful for Jollof/ });
   await expectClickable(why);
   // The technical name is in the badge's tooltip.

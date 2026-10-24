@@ -38,8 +38,6 @@ test('public pages', async ({ page }) => {
   await page.getByRole('switch', { name: /meal before that heavy/ }).click();
   await page.locator('.gate-demo').scrollIntoViewIfNeeded();
   await page.locator('.gate-demo').screenshot({ path: `${OUT}/02-landing-demo.png` });
-  await page.getByText('How it works in detail').click();
-  await page.locator('.tech-details').screenshot({ path: `${OUT}/03-landing-detail.png` });
   await page.goto('/login'); await settle(page); await shot(page, '04-login');
   await page.goto('/register'); await settle(page);
   await page.getByLabel('Password', { exact: true }).fill('long-enough-pass');

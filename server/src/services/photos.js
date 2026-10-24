@@ -1,38 +1,48 @@
-// Dish photo storage. Every upload is re-encoded, so only pixels survive: no metadata
-// (such as phone GPS data), no embedded scripts and nothing from the original filename.
-import fs from 'node:fs/promises';
-import path from 'node:path';
+// Dish photo storage. Every upload is re-encoded, so only pixels survive: no metadata (such as
+// phone GPS data), no embedded scripts and nothing from the original filename. Photos are kept in
+// PostgreSQL (dish_photos), not on disk, because the host's disk is wiped on every restart. Each
+// is served at /uploads/dishes/<random id>.webp (app.js).
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { pool } from '../db/pool.js';
 
-// UPLOADS_DIR lets a test run keep its photos apart from the dev server's.
-export const UPLOADS_ROOT = process.env.UPLOADS_DIR
-  ? path.resolve(process.env.UPLOADS_DIR)
-  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads');
-export const DISH_PHOTO_DIR = path.join(UPLOADS_ROOT, 'dishes');
-export const PHOTO_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
+export const PHOTO_NAME = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.webp$/;
 export const MAX_WIDTH = 1200;
+export const PHOTO_TYPE = 'image/webp';
 
 // Refuse images that decode to more than 40 megapixels, so a tiny file cannot expand to gigabytes in memory.
 const MAX_PIXELS = 40_000_000;
 
 export const photoUrl = (name) => (name ? `/uploads/dishes/${name}` : null);
 
-/** Re-encodes an image to WebP (max 1200 px wide) and saves it under a random name. Returns the name. */
-export async function saveDishPhoto(buffer, dir = DISH_PHOTO_DIR) {
-  const webp = await sharp(buffer, { limitInputPixels: MAX_PIXELS })
+/** Re-encodes an image to WebP, at most 1200 px wide, with all metadata dropped. */
+export async function encodeDishPhoto(buffer) {
+  return sharp(buffer, { limitInputPixels: MAX_PIXELS })
     .rotate() // apply the camera's orientation before the metadata is dropped
     .resize({ width: MAX_WIDTH, withoutEnlargement: true })
     .webp({ quality: 80 })
     .toBuffer();
-  await fs.mkdir(dir, { recursive: true });
-  const name = `${randomUUID()}.webp`;
-  await fs.writeFile(path.join(dir, name), webp, { flag: 'wx' });
-  return name;
 }
 
-export async function deleteDishPhoto(name, dir = DISH_PHOTO_DIR) {
-  if (!name || !PHOTO_NAME.test(name)) return;
-  await fs.rm(path.join(dir, name), { force: true });
+/** Re-encodes and stores a photo under a new random id. Returns its name (<id>.webp). */
+export async function saveDishPhoto(buffer, db = pool) {
+  const webp = await encodeDishPhoto(buffer);
+  const id = randomUUID();
+  await db.query('INSERT INTO dish_photos (photo_id, content_type, bytes) VALUES ($1, $2, $3)', [id, PHOTO_TYPE, webp]);
+  return `${id}.webp`;
+}
+
+/** Deletes a stored photo. Anything that isn't one of our names is ignored. */
+export async function deleteDishPhoto(name, db = pool) {
+  const match = PHOTO_NAME.exec(name ?? '');
+  if (!match) return;
+  await db.query('DELETE FROM dish_photos WHERE photo_id = $1', [match[1]]);
+}
+
+/** The stored photo for a name, or null. */
+export async function loadDishPhoto(name, db = pool) {
+  const match = PHOTO_NAME.exec(name ?? '');
+  if (!match) return null;
+  const { rows } = await db.query('SELECT content_type, bytes FROM dish_photos WHERE photo_id = $1', [match[1]]);
+  return rows[0] ? { contentType: rows[0].content_type, bytes: rows[0].bytes } : null;
 }

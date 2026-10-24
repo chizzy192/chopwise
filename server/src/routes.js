@@ -193,6 +193,11 @@ async function resetPassword(req, res) {
   res.json({ message: 'Your password has been reset, and you have been logged out everywhere. Log in with your new password.' });
 }
 
+// For the host's health check (render.yaml): the server is up and answering.
+function health(_req, res) {
+  res.json({ status: 'ok' });
+}
+
 function logout(_req, res) {
   clearSessionCookie(res);
   res.status(204).end();
@@ -525,6 +530,7 @@ async function ownDish(db, dishId, catererId, { lock = false } = {}) {
 }
 
 async function catererDishes(req, res) {
+  await expireReservations(); // plates left are shown, so return expired reservations first
   const { rows } = await query('SELECT * FROM meals WHERE caterer_id = $1 ORDER BY dish_type, name', [req.user.id]);
   const today = todayInLagos();
   res.json(rows.map((r) => dishBody(r, today)));
@@ -546,6 +552,7 @@ async function addDish(req, res) {
 }
 
 async function editDish(req, res) {
+  await expireReservations(); // plates left are shown, so return expired reservations first
   const { id } = req.valid.params;
   const body = req.valid.body;
   const outcome = await inTransaction(async (db) => {
@@ -579,6 +586,7 @@ async function editDish(req, res) {
 }
 
 async function setAvailability(req, res) {
+  await expireReservations(); // plates left are shown, so return expired reservations first
   const { id } = req.valid.params;
   const today = todayInLagos();
   // Sold out is stored as today's Lagos date, so it ends by itself at midnight.
@@ -591,6 +599,7 @@ async function setAvailability(req, res) {
 }
 
 async function uploadDishPhoto(req, res) {
+  await expireReservations(); // plates left are shown, so return expired reservations first
   const { id } = req.valid.params;
   // Check ownership before doing any image work.
   if (!(await ownDish({ query }, id, req.user.id))) return res.status(404).json({ error: NOT_YOURS.error });
@@ -617,6 +626,7 @@ async function uploadDishPhoto(req, res) {
 
 // Today's plates left (CLAUDE.md item 14). Stored with today's Lagos date, so it resets at midnight.
 async function setStock(req, res) {
+  await expireReservations(); // plates left are shown, so return expired reservations first
   const { id } = req.valid.params;
   const today = todayInLagos();
   const { rows } = await query(
@@ -924,6 +934,7 @@ export const PHOTO = 'photo';
 export const WEBHOOK_PATH = '/paystack/webhook';
 
 export const routes = [
+  { method: 'get', path: '/health', roles: PUBLIC, handler: health },
   { method: 'post', path: '/auth/register', roles: PUBLIC, limit: AUTH_LIMIT, body: s.registerBody, handler: register },
   { method: 'post', path: '/auth/login', roles: PUBLIC, limit: AUTH_LIMIT, body: s.loginBody, handler: login },
   { method: 'post', path: '/auth/logout', roles: PUBLIC, handler: logout },

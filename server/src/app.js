@@ -31,7 +31,7 @@ function paystackSignature(req, res, next) {
   next();
 }
 import { photoUpload } from './http/upload.js';
-import { UPLOADS_ROOT } from './services/photos.js';
+import { loadDishPhoto } from './services/photos.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -128,14 +128,19 @@ export function assertRolesDeclared(route) {
  * options.todayCheckin loads a staff member's check-in for today, or null (default: database)
  * options.stubHandlers replaces every handler with a 200 response, to test the security layers alone
  * options.staticDir   built client to serve (production)
+ * options.loadPhoto   loads a stored dish photo by name, or null (default: database)
  */
 export function createApp({
   routes = defaultRoutes, sessionUser = dbSessionUser, todayCheckin: loadCheckin = dbTodayCheckin,
-  stubHandlers = false, staticDir,
+  stubHandlers = false, staticDir, loadPhoto = loadDishPhoto,
 } = {}) {
   const origin = clientOrigin();
   const app = express();
   app.disable('x-powered-by');
+  // Behind the host's proxy (Render) the client's address is in X-Forwarded-For. Trusting exactly
+  // one hop lets the rate limits see real addresses and Express see HTTPS (for Secure cookies),
+  // without letting a client fake its address. Off locally, where there is no proxy.
+  if (isProduction()) app.set('trust proxy', 1);
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -188,15 +193,19 @@ export function createApp({
   app.use('/api', api);
   app.locals.apiRouter = api;
 
-  // Dish photos: random names that never change, so they can be cached for a year.
-  // nosniff stops a browser from treating a file as anything other than its declared type.
-  app.use('/uploads', express.static(UPLOADS_ROOT, {
-    maxAge: '365d',
-    immutable: true,
-    index: false,
-    dotfiles: 'deny',
-    setHeaders: (res) => res.set('X-Content-Type-Options', 'nosniff'),
+  // Dish photos, stored in the database: random names that never change, so they can be cached for
+  // a year. nosniff stops a browser from treating one as anything other than its declared type.
+  app.get('/uploads/dishes/:name', wrap(async (req, res) => {
+    const photo = await loadPhoto(req.params.name);
+    if (!photo) return res.status(404).json({ error: 'Not found' });
+    res.set({
+      'Content-Type': photo.contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.send(photo.bytes);
   }));
+  app.use('/uploads', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
   if (staticDir && fs.existsSync(staticDir)) {
     app.use(express.static(staticDir));

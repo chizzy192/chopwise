@@ -30,13 +30,21 @@ You need Node.js 18 or later and PostgreSQL.
    cd server
    cp .env.example .env      # then fill in the values (see below)
    npm install
-   npm run db:setup          # creates tables, the first admin and demo data
+   npm run db:setup          # local only: rebuilds the tables, the first admin and demo data
    npm test                  # logic and security tests (no database needed)
    npm run dev               # API on http://localhost:4000
    ```
    In `.env`, set `DATABASE_URL`, a random `JWT_SECRET` of at least 32 characters, `CLIENT_ORIGIN`
    (the address the app is opened at), and the first admin's `ADMIN_EMAIL` and `ADMIN_PASSWORD`
    (at least 10 characters, not the demo password). `db:setup` refuses to run without them.
+
+   The database scripts:
+
+   | Command | What it does |
+   |---|---|
+   | `npm run db:migrate` | Creates the tables on an empty database, or updates an existing one, and adds the settings row and the first admin. Never deletes data; safe on the live database. |
+   | `npm run db:seed` | Adds the sample data (sample caterer, demo staff, dishes, order history). Adds nothing if it's already there. |
+   | `npm run db:setup` | **Deletes everything**, then runs migrate and seed. Local only: it refuses when `NODE_ENV=production` or when `DATABASE_URL` isn't a database on this computer, unless you add `-- --force`. |
 3. In a second terminal, start the frontend:
    ```
    cd client
@@ -119,9 +127,15 @@ Once a day, before the first order, the staff member does a check-in: they confi
 
 H comes from the health onboarding question every staff member answers after signing up: it is 1 for any declared diet-related condition. H, P1, P2 and G are computed once at the check-in, stored in `daily_checkins`, and used for every catalogue and order request that day. Days, intake and check-ins reset at midnight Africa/Lagos time.
 
-## Production build
+## Production build and deployment
+
+From the repository root, one command builds everything and one starts it (this is what Render runs):
 
 ```
-cd client && npm run build
-cd ../server && npm start   # serves the API and the built app on port 4000
+npm run build   # installs and builds the client (Vite), then installs the server
+npm start       # Express serves the API and client/dist on PORT (4000 by default)
 ```
+
+The live site is one Render web service with a Neon PostgreSQL database; dish photos are stored in
+the database. See [docs/DEPLOY.md](docs/DEPLOY.md) for the environment variables, the Render and
+Neon steps, running `db:migrate` and `db:seed` against Neon, and the Paystack webhook.

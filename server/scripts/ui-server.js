@@ -1,7 +1,7 @@
-// API for the browser smoke tests (client: npm run test:ui). It never touches the dev database
-// or uploads: it rebuilds a separate database (<dev name>_ui_test) from the demo data, keeps its
-// photos in a temporary folder, and talks to a mock Paystack whose checkout page "pays" and sends
-// the browser back to CLIENT_ORIGIN/payment/return, as the real one does.
+// API for the browser smoke tests (client: npm run test:ui). It never touches the dev database:
+// it rebuilds a separate database (<dev name>_ui_test, photos included) from the demo data, and
+// talks to a mock Paystack whose checkout page "pays" and sends the browser back to
+// CLIENT_ORIGIN/payment/return, as the real one does.
 import 'dotenv/config';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -25,7 +25,6 @@ if (!exists.rowCount) await admin.query(`CREATE DATABASE "${testDb}"`);
 await admin.end();
 
 process.env.DATABASE_URL = testUrl.toString();
-process.env.UPLOADS_DIR = path.join(os.tmpdir(), 'chopwise-ui-test-uploads');
 // The smoke tests log in more than 10 times in 15 minutes; the real limit is tested in npm test and test:system.
 process.env.TEST_AUTH_LIMIT = '100';
 const setup = spawnSync(process.execPath, ['src/db/setup.js'], { cwd: serverDir, env: process.env, stdio: 'inherit' });

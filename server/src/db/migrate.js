@@ -1,9 +1,18 @@
-// Brings an existing database up to the current schema without deleting anything:
+// Brings a database up to the current schema without deleting anything:
 //   npm run db:migrate
-// Every step is additive and safe to run again. `npm run db:setup` is still the way to start
-// from scratch with the demo data.
+// On an empty database it creates every table from schema.sql. On an existing one it applies only
+// additive steps, each safe to run again. Then it makes sure the settings row and the first admin
+// (ADMIN_EMAIL / ADMIN_PASSWORD) exist, never changing them if they do. Safe to run on live data.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { pool } from './pool.js';
+import { hashPassword } from '../services/passwords.js';
+import { adminFromEnv } from './accounts.js';
 
+const dir = path.dirname(fileURLToPath(import.meta.url));
+
+// Changes made after the first release, in order. Every step is additive and idempotent.
 const STEPS = [
   // Admin-given temporary passwords (caterer accounts).
   'ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE',
@@ -38,12 +47,76 @@ const STEPS = [
      shown_at_delivered  INT          NOT NULL CHECK (shown_at_delivered >= 0),
      last_shown_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
    )`,
+  // Dish photos live in the database, because the host's disk is wiped on every restart.
+  `CREATE TABLE IF NOT EXISTS dish_photos (
+     photo_id      UUID         PRIMARY KEY,
+     content_type  VARCHAR(30)  NOT NULL CHECK (content_type = 'image/webp'),
+     bytes         BYTEA        NOT NULL CHECK (octet_length(bytes) BETWEEN 1 AND 3145728),
+     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+   )`,
 ];
 
-async function main() {
-  for (const sql of STEPS) await pool.query(sql);
-  console.log(`Database up to date (${STEPS.length} steps checked). No data was removed.`);
-  await pool.end();
+// VAT starts at Nigeria's standard rate of 7.5%; the delivery fee at ₦0 until the admin sets it.
+export const DEFAULT_SETTINGS = { vatRate: 7.5, deliveryFee: 0 };
+
+// Photo files saved on disk by older versions (server/uploads/dishes), copied into dish_photos.
+const LEGACY_PHOTO_DIR = path.resolve(dir, '../../uploads/dishes');
+
+/** Creates or updates the schema. Never drops or deletes anything. Returns what it did. */
+export async function migrate(db = pool) {
+  const done = [];
+  const { rows } = await db.query("SELECT to_regclass('public.users') IS NOT NULL AS exists");
+  if (!rows[0].exists) {
+    await db.query(fs.readFileSync(path.join(dir, 'schema.sql'), 'utf8'));
+    done.push('created every table (empty database)');
+  }
+  for (const sql of STEPS) await db.query(sql);
+  done.push(`checked ${STEPS.length} additive steps`);
+
+  const settings = await db.query(
+    'INSERT INTO settings (vat_rate, delivery_fee) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM settings) RETURNING setting_id',
+    [DEFAULT_SETTINGS.vatRate, DEFAULT_SETTINGS.deliveryFee],
+  );
+  if (settings.rowCount) done.push(`set VAT to ${DEFAULT_SETTINGS.vatRate}% and the delivery fee to ₦${DEFAULT_SETTINGS.deliveryFee}`);
+
+  // The first admin, only if no account has that email yet; an existing account is left alone.
+  if (process.env.ADMIN_EMAIL) {
+    const admin = adminFromEnv();
+    const exists = await db.query('SELECT 1 FROM users WHERE email = $1', [admin.email]);
+    if (!exists.rowCount) {
+      await db.query("INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, 'admin')",
+        [admin.name, admin.email, await hashPassword(admin.password)]);
+      done.push(`created the first admin, ${admin.email}`);
+    }
+  } else {
+    done.push('ADMIN_EMAIL is not set, so no admin account was created');
+  }
+
+  done.push(...await importLegacyPhotos(db));
+  return done;
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+async function importLegacyPhotos(db) {
+  if (!fs.existsSync(LEGACY_PHOTO_DIR)) return [];
+  const { rows } = await db.query(
+    `SELECT m.photo FROM meals m WHERE m.photo IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM dish_photos p WHERE p.photo_id::text || '.webp' = m.photo)`,
+  );
+  let copied = 0;
+  for (const { photo } of rows) {
+    const file = path.join(LEGACY_PHOTO_DIR, photo);
+    if (!fs.existsSync(file)) continue;
+    await db.query("INSERT INTO dish_photos (photo_id, content_type, bytes) VALUES ($1, 'image/webp', $2) ON CONFLICT DO NOTHING",
+      [photo.replace(/\.webp$/, ''), fs.readFileSync(file)]);
+    copied += 1;
+  }
+  return copied ? [`copied ${copied} dish photo${copied === 1 ? '' : 's'} from server/uploads into the database`] : [];
+}
+
+// Run directly: npm run db:migrate
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  migrate()
+    .then((done) => { console.log(`Database up to date. No data was removed.\n${done.map((d) => `  - ${d}`).join('\n')}`); })
+    .catch((e) => { console.error(e.message ?? e); process.exitCode = 1; })
+    .finally(() => pool.end());
+}

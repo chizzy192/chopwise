@@ -3,9 +3,6 @@
 // database in scripts/system-scenarios.js (T37–T44).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import sharp from 'sharp';
 import {
   changedClasses, needsReapproval, isSoldOut, dishStatus, splitMenu, rdiOf, hasRdi,
@@ -13,7 +10,9 @@ import {
 import { evaluate, emptyIntake } from '../src/logic/engine.js';
 import { todayInLagos } from '../src/logic/time.js';
 import { dishCreateBody, dishEditBody, rdiProblem } from '../src/http/schemas.js';
-import { saveDishPhoto, deleteDishPhoto, PHOTO_NAME, MAX_WIDTH } from '../src/services/photos.js';
+import {
+  encodeDishPhoto, saveDishPhoto, deleteDishPhoto, loadDishPhoto, PHOTO_NAME, MAX_WIDTH,
+} from '../src/services/photos.js';
 
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-the-config-check';
 process.env.CLIENT_ORIGIN = 'http://localhost:5173';
@@ -110,46 +109,71 @@ test('sold out resets at the Lagos midnight', () => {
   assert.equal(isSoldOut(null, '2026-10-24'), false);
 });
 
-// ---------- Photo storage ----------
-let dir;
-before(async () => { dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chopwise-photos-')); });
-after(async () => { await fs.rm(dir, { recursive: true, force: true }); });
-
-// sharp caches open files, which Windows then refuses to delete; read stored files as buffers.
-sharp.cache(false);
-const metaOf = async (file) => sharp(await fs.readFile(file)).metadata();
+// ---------- Photo storage (in PostgreSQL; a fake db records the queries) ----------
 const png = (width, height) => sharp({ create: { width, height, channels: 3, background: '#b5651d' } }).png().toBuffer();
+function fakeDb(rows = []) {
+  const calls = [];
+  return { calls, query: async (sql, params) => { calls.push({ sql, params }); return { rows }; } };
+}
 
-test('photos are saved as WebP under a generated name, at most 1200 px wide, with metadata stripped', async () => {
+test('photos are re-encoded to WebP, at most 1200 px wide, with metadata stripped', async () => {
   // A JPEG carrying EXIF data, as a phone photo would (camera make, GPS, etc.).
   const phone = await sharp({ create: { width: 2400, height: 1800, channels: 3, background: '#556b2f' } })
     .withExif({ IFD0: { Make: 'PhoneCo', Copyright: 'secret location' } }).jpeg().toBuffer();
   assert.ok((await sharp(phone).metadata()).exif, 'the test input really has EXIF');
-  const name = await saveDishPhoto(phone, dir);
-  assert.match(name, PHOTO_NAME);
-  const stored = await fs.readFile(path.join(dir, name));
-  const meta = await metaOf(path.join(dir, name));
+  const stored = await encodeDishPhoto(phone);
+  const meta = await sharp(stored).metadata();
   assert.equal(meta.format, 'webp');
   assert.equal(meta.width, MAX_WIDTH);
   assert.equal(meta.exif, undefined, 'EXIF removed');
   assert.ok(!stored.includes(Buffer.from('secret location')));
+  assert.equal((await sharp(await encodeDishPhoto(await png(400, 300))).metadata()).width, 400, 'small photos are not enlarged');
 });
 
-test('small photos are not enlarged, and each upload gets a new name', async () => {
-  const input = await png(400, 300);
-  const [a, b] = [await saveDishPhoto(input, dir), await saveDishPhoto(input, dir)];
+test('a saved photo goes into dish_photos under a new random id, never the uploaded name', async () => {
+  const db = fakeDb();
+  const input = await png(50, 50);
+  const [a, b] = [await saveDishPhoto(input, db), await saveDishPhoto(input, db)];
+  assert.match(a, PHOTO_NAME);
   assert.notEqual(a, b);
-  assert.equal((await metaOf(path.join(dir, a))).width, 400);
+  const insert = db.calls[0];
+  assert.match(insert.sql, /^INSERT INTO dish_photos/);
+  assert.equal(`${insert.params[0]}.webp`, a);
+  assert.equal(insert.params[1], 'image/webp');
+  assert.equal((await sharp(insert.params[2]).metadata()).format, 'webp', 'the stored bytes are the re-encoded WebP');
 });
 
-test('replacing a photo deletes the old file; names that are not ours are never touched', async () => {
-  const name = await saveDishPhoto(await png(50, 50), dir);
-  await deleteDishPhoto(name, dir);
-  await assert.rejects(fs.access(path.join(dir, name)));
-  await fs.writeFile(path.join(dir, 'keep.txt'), 'x');
-  await deleteDishPhoto('../keep.txt', dir);
-  await deleteDishPhoto('keep.txt', dir);
-  await fs.access(path.join(dir, 'keep.txt'));
+test('deleting or loading a photo only ever uses one of our names', async () => {
+  const db = fakeDb();
+  await deleteDishPhoto('../keep.txt', db);
+  await deleteDishPhoto('keep.txt', db);
+  assert.equal(await loadDishPhoto('x.webp; DROP TABLE meals', db), null);
+  assert.equal(db.calls.length, 0, 'no query for a name that is not ours');
+  const name = '0b6f2f0e-4d3c-4a6b-9f1e-2c3d4e5f6a7b.webp';
+  await deleteDishPhoto(name, db);
+  assert.deepEqual(db.calls[0].params, ['0b6f2f0e-4d3c-4a6b-9f1e-2c3d4e5f6a7b']);
+  const found = await loadDishPhoto(name, fakeDb([{ content_type: 'image/webp', bytes: Buffer.from('x') }]));
+  assert.deepEqual(found, { contentType: 'image/webp', bytes: Buffer.from('x') });
+});
+
+test('stored photos are served with their type, nosniff and a one-year cache; anything else is 404', async () => {
+  const name = '0b6f2f0e-4d3c-4a6b-9f1e-2c3d4e5f6a7b.webp';
+  const bytes = await encodeDishPhoto(await png(20, 20));
+  const app = createApp({ stubHandlers: true, loadPhoto: async (n) => (n === name ? { contentType: 'image/webp', bytes } : null) });
+  const s = app.listen(0);
+  await new Promise((r) => s.once('listening', r));
+  const site = `http://127.0.0.1:${s.address().port}`;
+  try {
+    const ok = await fetch(`${site}/uploads/dishes/${name}`);
+    assert.equal(ok.status, 200);
+    assert.equal(ok.headers.get('content-type'), 'image/webp');
+    assert.equal(ok.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(ok.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+    assert.deepEqual(Buffer.from(await ok.arrayBuffer()), bytes);
+    assert.equal((await fetch(`${site}/uploads/dishes/1b6f2f0e-4d3c-4a6b-9f1e-2c3d4e5f6a7b.webp`)).status, 404);
+    assert.equal((await fetch(`${site}/uploads/dishes/..%2f..%2fpackage.json`)).status, 404);
+    assert.equal((await fetch(`${site}/uploads/other.txt`)).status, 404);
+  } finally { s.close(); }
 });
 
 // ---------- Upload checks over HTTP (handler stubbed) ----------

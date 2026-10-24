@@ -33,6 +33,7 @@ const cookie = (id, ver) => `${SESSION_COOKIE}=${signSession(id, ver)}`;
 
 // The permission table the system must keep. Changing a route's roles means changing this on purpose.
 const EXPECTED = {
+  'GET /health': PUBLIC,
   'POST /auth/register': PUBLIC,
   'POST /auth/login': PUBLIC,
   'POST /auth/logout': PUBLIC,
@@ -322,4 +323,42 @@ test('feedback is read on the admin report only: staff and caterers are refused'
   assert.equal((await call('/admin/report')).status, 401);
   assert.equal((await call('/admin/report', { role: 'admin' })).status, 200);
   assert.equal((await call('/feedback', { method: 'POST', role: 'caterer', body: {} })).status, 403, 'only staff send feedback');
+});
+
+test('health check: GET /api/health answers 200 without a session', async () => {
+  const res = await call('/health');
+  assert.equal(res.status, 200);
+});
+
+test('behind the host\'s proxy (production) Express trusts exactly one hop; locally it trusts none', async () => {
+  assert.equal(createApp({ stubHandlers: true }).get('trust proxy'), false);
+  const was = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try { assert.equal(createApp({ stubHandlers: true }).get('trust proxy'), 1); } finally { process.env.NODE_ENV = was; }
+});
+
+test('Neon\'s sslmode=require keeps full certificate checks (verify-full); other URLs are unchanged', async () => {
+  const { connectionString } = await import('../src/db/pool.js');
+  assert.equal(connectionString('postgresql://u:p@ep-x.neon.tech/neondb?sslmode=require&channel_binding=require'),
+    'postgresql://u:p@ep-x.neon.tech/neondb?sslmode=verify-full&channel_binding=require');
+  assert.equal(connectionString('postgres://u:p@localhost:5432/chopwise'), 'postgres://u:p@localhost:5432/chopwise');
+  assert.equal(connectionString(''), '');
+});
+
+test('db:setup refuses to wipe a production database unless --force is given', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync(process.execPath, ['src/db/setup.js'], {
+    env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: 'postgres://nobody:nothing@127.0.0.1:1/none' }, encoding: 'utf8',
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /NODE_ENV is production, so it stopped/);
+});
+
+test('db:setup refuses to wipe a database that is not on this computer (such as Neon) unless --force is given', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync(process.execPath, ['src/db/setup.js'], {
+    env: { ...process.env, NODE_ENV: 'development', DATABASE_URL: 'postgresql://u:p@ep-example.neon.tech/neondb?sslmode=require' }, encoding: 'utf8',
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /points to ep-example\.neon\.tech, not this computer, so it stopped/);
 });

@@ -31,7 +31,7 @@ CREATE TABLE meals (
   dish_type       dish_type    NOT NULL DEFAULT 'meal',
   name            VARCHAR(150) NOT NULL,
   description     VARCHAR(200),
-  -- Generated name of the re-encoded WebP in uploads/dishes; never the uploaded filename.
+  -- "<id>.webp" of the re-encoded photo in dish_photos; never the uploaded filename.
   photo           VARCHAR(64)  CHECK (photo ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$'),
   -- Whole kobo (₦1 = 100 kobo).
   price_kobo      INT          NOT NULL CHECK (price_kobo BETWEEN 100 AND 10000000),
@@ -229,4 +229,13 @@ CREATE TABLE feedback_prompts (
   times_shown         INT          NOT NULL CHECK (times_shown BETWEEN 1 AND 3),
   shown_at_delivered  INT          NOT NULL CHECK (shown_at_delivered >= 0),
   last_shown_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- Dish photos (CLAUDE.md item 11): the re-encoded WebP bytes, stored in the database because the
+-- host's disk is wiped on every restart. meals.photo holds "<photo_id>.webp".
+CREATE TABLE dish_photos (
+  photo_id      UUID         PRIMARY KEY,
+  content_type  VARCHAR(30)  NOT NULL CHECK (content_type = 'image/webp'),
+  bytes         BYTEA        NOT NULL CHECK (octet_length(bytes) BETWEEN 1 AND 3145728),
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

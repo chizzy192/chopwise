@@ -75,7 +75,7 @@ The written report (Chapters 1–4) describes this system, so the behaviour belo
     - what each role does
     - an example receipt
     - log in and sign-up links
-    - an expandable "How it works in detail" section for supervisors and examiners, with the technical terms (majority gate, H, P1, P2, G, RDI, bands, balanced meals)
+    - (No "How it works in detail" section: it was removed at the user's request. The technical account lives in the written report.)
     - It is written for someone with no technical or nutrition background (see **Plain language** below).
 13. **Order status for caterers:** paid → preparing → out for delivery → delivered (by code).
 14. **Plates left:**
@@ -118,9 +118,16 @@ The written report (Chapters 1–4) describes this system, so the behaviour belo
 - Helmet security headers; strict CORS.
 - Validate every request body with Zod.
 - Role checks on **every** server route.
-- Image uploads: allow only JPEG, PNG and WebP, limit the size, and store files with generated names.
+- Image uploads: allow only JPEG, PNG and WebP (checked from the contents), at most 2 MB, re-encoded to WebP with sharp, stored with generated names. Photos are stored in PostgreSQL (`dish_photos`), not on disk, because the host wipes its disk on restart; they are served at `/uploads/dishes/<id>.webp` with nosniff and a one-year cache.
 - Audit log of admin actions.
 - Secrets only in `.env`. Never commit them.
+
+## Deployment
+
+- One Render web service (free plan) and a Neon PostgreSQL database; see `docs/DEPLOY.md` and `render.yaml`. The root `npm run build` builds the client and installs the server; `npm start` runs Express, which serves `client/dist` and falls back to `index.html` for app routes. `GET /api/health` is the health check.
+- In production Express trusts one proxy hop (`trust proxy = 1`), cookies are Secure and SameSite=Lax, and `CLIENT_ORIGIN` is the site's own address.
+- Database scripts: `db:migrate` creates or updates tables and never deletes data; `db:seed` adds the sample data; `db:setup` wipes and rebuilds, and refuses when `NODE_ENV=production` or the database isn't local, unless `--force`. Neon needs `sslmode=require` (kept as full certificate checks).
+- A sleeping free service stops timers, so reservation expiry also runs before every stock read and checkout.
 
 ## Visual design
 
@@ -145,6 +152,6 @@ Follow `docs/design-strategy.md` for the look and feel (earth-tone OKLCH palette
 ## Working rules
 
 - Build in phases and keep `npm test` passing after each phase. Add tests for every new rule.
-- Update `server/src/db/setup.js` sample data whenever the schema changes.
+- Whenever the schema changes, update `server/src/db/schema.sql`, add an additive step to `server/src/db/migrate.js`, and update the sample data in `server/src/db/seed.js`.
 - Use plain, clear UI copy in sentence case.
 - After each phase, summarise what changed so the report (Chapters 3–4) can be updated.

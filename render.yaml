@@ -1,0 +1,54 @@
+# Render Blueprint: ChopWise as one web service (free plan). Express serves the API under /api and
+# the built React client for every other path. The database is Neon PostgreSQL (DATABASE_URL).
+# Secrets are marked sync: false, so Render asks for them when the Blueprint is created and they
+# are never stored in this file. See docs/DEPLOY.md.
+services:
+  - type: web
+    name: chopwise
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # The site's own address, e.g. https://chopwise.onrender.com (no trailing slash).
+      - key: CLIENT_ORIGIN
+        sync: false
+      # Neon connection string, ending in ?sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+      # Random, at least 32 characters. Render generates one.
+      - key: JWT_SECRET
+        generateValue: true
+      # 64 hex characters (32 bytes). Generate it yourself; see docs/DEPLOY.md.
+      - key: DELIVERY_CODE_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CATERER_EMAIL
+        sync: false
+      - key: CATERER_PASSWORD
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false

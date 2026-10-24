@@ -9,9 +9,10 @@
     "dev": "node --watch src/index.js",
     "test": "node --test test/*.test.js",
     "test:system": "node scripts/system-scenarios.js",
-    "db:setup": "node src/db/setup.js",
     "test:ui": "npm --prefix ../client run test:ui",
-    "db:migrate": "node src/db/migrate.js"
+    "db:migrate": "node src/db/migrate.js",
+    "db:seed": "node src/db/seed.js",
+    "db:setup": "node src/db/setup.js"
   },
   "dependencies": {
     "argon2": "^0.45.1",
@@ -29,5 +30,8 @@
     "pg": "^8.13.0",
     "sharp": "^0.35.5",
     "zod": "^4.6.7"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -7,7 +7,7 @@ import { classifyMeal } from '../../../server/src/logic/meal.js';
 import { FitBadge, GateLights, ThemeToggle, formatKobo } from '../components.jsx';
 
 // The standalone landing page for logged-out visitors (CLAUDE.md item 12). Plain words first; the
-// technical terms (H, P1, P2, G, RDI, bands) are kept for "How it works in detail" at the end.
+// technical terms (H, P1, P2, G, RDI, bands) are left to the written report.
 
 // Example meals (% of the daily limit per serving). The first two are from the sample menu.
 const EXAMPLES = [
@@ -25,7 +25,7 @@ const STEPS = [
 ];
 
 // The three questions of the demo, in plain words. The technical name is in brackets for examiners.
-// "Heavy" means the meal took a food type over 70% of the daily limit (see "How it works in detail").
+// "Heavy" means the meal took a food type over 70% of the daily limit.
 const QUESTIONS = [
   ['H', 'Do you have a diet-related health condition, such as diabetes or high blood pressure?'],
   ['P1', 'Was your last meal heavy?'],
@@ -193,46 +193,6 @@ export default function Landing() {
             <p className="code-line">Delivery code <b className="delivery-code small">4827</b> <span className="hint">(example; yours is shown after payment)</span></p>
           </div>
         </section>
-
-        {/* <section className="section" aria-labelledby="detail-h">
-          <h2 id="detail-h" className="sr-only">For supervisors and examiners</h2>
-          <details className="panel tech-details">
-            <summary>How it works in detail</summary>
-            <div className="tech-body">
-              <h3>Daily limit (RDI)</h3>
-              <p>
-                Every value is a percentage of the Recommended Daily Intake (RDI) for five food classes: carbohydrates,
-                proteins, fats and oils, vitamins and minerals. Caterers enter each dish's values per serving; an admin approves
-                them. A paid order adds its values to the day's intake, which resets at midnight (Africa/Lagos).
-              </p>
-              <h3>The majority gate</h3>
-              <p>Each morning's check-in sets three binary inputs:</p>
-              <ul>
-                <li><b>H</b> (the health check) = 1 if the staff member declared a diet-related condition.</li>
-                <li><b>P1</b> = 1 if, after the last two meals together, any class is above 70% of RDI.</li>
-                <li><b>P2</b> = 1 if, after the earlier of the two meals alone, any class is above 70% of RDI.</li>
-              </ul>
-              <p>
-                The 3-input majority gate <b>G = H·P1 + H·P2 + P1·P2</b> is 1 when at least two inputs are 1. G = 0 gives soft
-                guidance (recommendations and warnings only); G = 1 gives full guidance (recommendations, warnings and
-                restrictions). G is computed once a day and stored.
-              </p>
-              <p className="formula tnum" aria-live="polite">
-                With the answers above: G = {inputs.H}·{inputs.P1} + {inputs.H}·{inputs.P2} + {inputs.P1}·{inputs.P2} = <b>{g}</b>
-              </p>
-              <h3>Bands per food class</h3>
-              <p>
-                Low 0–40%, Moderate &gt;40–70%, High &gt;70–90%, Critical &gt;90% of RDI (upper bounds inclusive). Moderate
-                recommends meals from classes still in Low. High warns and recommends only meals that keep every High class at
-                or under 90% (the allowance is 90 − current intake). Under G = 1, a non-balanced meal is restricted when its
-                dominant class (its highest value) would end above 90% after the whole cart; exactly 90% still fits.
-              </p>
-              <h3>Balanced meals</h3>
-              <p>A meal is balanced when every class is between 5% and 35% of RDI. Balanced meals are never restricted and are listed first.</p>
-              <p className="hint">Plain words used in the app: health check (H), last meal heavy and meal before that heavy (P1 and P2, where heavy means a class above 70% of RDI), gentle or firm guidance (G = 0 or 1), your daily limit (RDI), and the Fit states Balanced, Good for you right now (Recommended), Careful (Caution) and Not today (Restricted today).</p>
-            </div>
-          </details>
-        </section> */}
 
         <section className="section closing" aria-labelledby="start-h">
           <h2 id="start-h" className="hero-title">Ready for today's check-in?</h2>

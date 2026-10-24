@@ -217,10 +217,6 @@ td select { inline-size: auto; min-inline-size: 8.5rem; }
 .demo-setting { margin: 0 0 var(--space-4); font-weight: 500; }
 .demo-answer { margin-inline-start: var(--space-1); font-weight: 600; }
 .verdict-level { font-weight: 600; }
-.tech-details summary { cursor: pointer; min-block-size: var(--tap); display: flex; align-items: center; font-weight: 500; font-size: var(--text-title-s); }
-.tech-body { max-inline-size: 70ch; }
-.tech-body h3 { margin-block: var(--space-4) var(--space-1); }
-.tech-body ul { padding-inline-start: var(--space-5); }
 
 /* ---------- Card grids (design strategy §3, "Where editorial stops") ----------
    Phones and small tablets keep the single-column layouts above; from 1024 px the ordering pages
