@@ -47,7 +47,11 @@ test('landing: explains ChopWise, runs the gate demo, and links to log in and si
   const why = page.getByRole('button', { name: /Careful for Jollof/ });
   await expectClickable(why);
   // The technical name is in the badge's tooltip.
+  // Reach it with the keyboard (Tab), as a keyboard user would; the tooltip is for keyboard focus.
   await why.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(why).toBeFocused();
   await expect(why.locator('.term-tip')).toHaveText('Technical name: Caution');
   await expect(why.locator('.term-tip')).toBeVisible();
   await expect(page.locator('.example-receipt')).toContainText('Yoghurt (1 cup) (extra)');
