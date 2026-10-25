@@ -1,5 +1,5 @@
 import {
-  FOOD_CLASSES, CLASS_LABELS, BANDS, BAND_ORDER, FIT, LOW_MAX, WARNING_THRESHOLD, RESTRICTION_THRESHOLD, DAILY_LIMIT, OVER_LIMIT,
+  FOOD_CLASSES, CLASS_LABELS, BANDS, BAND_ORDER, FIT, LOW_MAX, WARNING_THRESHOLD, RESTRICTION_THRESHOLD, DAILY_LIMIT, OVER_LIMIT, OVER_LIMIT_ADD,
 } from './constants.js';
 
 export function emptyIntake() {
@@ -65,7 +65,9 @@ const lower = (c) => CLASS_LABELS[c].toLowerCase();
 /**
  * Fit signal for one dish at a given quantity, judged on projected intake
  * (current intake + meal × quantity). Checked in this order:
- *   1. Balanced meal                                            → Balanced (never locked)
+ *   0. A food type is already past 100% of the daily limit and this
+ *      dish adds 20% or more of it (any G, balanced or not)       → Restricted today (locked)
+ *   1. Balanced meal                                            → Balanced (never locked otherwise)
  *   2. Dominant class would end above 90%: G = 1                → Restricted today (locked)
  *                                          G = 0                → Caution (strong warning)
  *   3. Dominant class still Low and no class it adds to
@@ -80,6 +82,15 @@ export function fitFor({ gate, intake, meal, quantity = 1 }) {
   const adds = scaleMeal(meal, quantity);
   const projected = addMeal(intake, adds);
   const before = bandsFor(intake);
+
+  // Past the full daily limit: a big addition to that food type is locked whatever G is.
+  const past = pastLimitClass(intake, adds);
+  if (past) {
+    return {
+      fit: FIT.RESTRICTED, locked: true, lockReason: 'past-limit', lockClass: past, adds, projected,
+      why: [pastLimitWhy(past, intake[past], adds[past])],
+    };
+  }
 
   const effects = FOOD_CLASSES.filter((c) => adds[c] > 0).map((c) => ({
     foodClass: c,
@@ -103,8 +114,20 @@ export function fitFor({ gate, intake, meal, quantity = 1 }) {
   } else if (dominantBand === BANDS.LOW && overLimit.length === 0) fit = FIT.RECOMMENDED;
   else if (overLimit.length || intoHigh.length) fit = FIT.CAUTION;
 
-  return { fit, locked, adds, projected, why: whyLines({ gate, meal, fit, intake, projected, effects, overLimit, intoHigh }) };
+  return {
+    fit, locked, ...(locked ? { lockReason: 'cut-off', lockClass: meal.dominantClass } : {}),
+    adds, projected, why: whyLines({ gate, meal, fit, intake, projected, effects, overLimit, intoHigh }),
+  };
 }
+
+/** The food type already past 100% that this addition adds 20% or more of (the largest), or null. */
+export function pastLimitClass(before, adds) {
+  return FOOD_CLASSES
+    .filter((c) => (before[c] ?? 0) > DAILY_LIMIT && (adds[c] ?? 0) >= OVER_LIMIT_ADD)
+    .sort((a, b) => adds[b] - adds[a])[0] ?? null;
+}
+
+const pastLimitWhy = (c, at, adds) => `${CLASS_LABELS[c]} are past your full daily limit today (${at}%). This adds ${adds}%, and anything adding ${OVER_LIMIT_ADD}% or more of it is locked until midnight.`;
 
 // Plain-language reasons for the Fit popover, citing RDI numbers.
 function whyLines({ gate, meal, fit, intake, projected, overLimit, intoHigh, effects }) {
@@ -145,7 +168,7 @@ const MAX_ALTERNATIVES = 3;
  * catalogue: meals already given their Fit for today.
  */
 export function alternativesFor(locked, catalogue, intake) {
-  const cls = locked.dominantClass;
+  const cls = locked.lockClass ?? locked.dominantClass;
   return catalogue
     .filter((m) => m.id !== locked.id && !m.locked && (m.isBalanced || band(intake[m.dominantClass] ?? 0) !== BANDS.CRITICAL))
     .sort((a, b) => (a[cls] ?? 0) - (b[cls] ?? 0) || FIT_ORDER.indexOf(a.fit) - FIT_ORDER.indexOf(b.fit) || a.name.localeCompare(b.name))
@@ -195,8 +218,8 @@ export function evaluate({ gate, intake, meals }) {
 
   const catalogue = meals
     .map((m) => {
-      const { fit, locked, why } = fitFor({ gate, intake, meal: m });
-      return { ...m, fit, locked, why };
+      const { fit, locked, why, lockReason, lockClass } = fitFor({ gate, intake, meal: m });
+      return { ...m, fit, locked, why, ...(locked ? { lockReason, lockClass } : {}) };
     })
     .sort((a, b) => FIT_ORDER.indexOf(a.fit) - FIT_ORDER.indexOf(b.fit));
 
@@ -227,7 +250,10 @@ export function evaluateCart({ gate, intake, meals, lines }) {
     if (!meal) throw new RangeError(`Meal ${mealId} is not in the catalogue`);
     const result = fitFor({ gate, intake, meal, quantity });
     projected = addMeal(projected, result.adds);
-    return { mealId, quantity, meal, adds: result.adds, fit: result.fit, locked: result.locked, why: result.why };
+    return {
+      mealId, quantity, meal, adds: result.adds, fit: result.fit, locked: result.locked, why: result.why,
+      ...(result.locked ? { lockReason: result.lockReason, lockClass: result.lockClass } : {}),
+    };
   });
 
   // The whole cart: a dish's dominant class may only pass 90% because of the other lines.
@@ -246,7 +272,24 @@ export function evaluateCart({ gate, intake, meals, lines }) {
       if (!line.locked) line.why = [...line.why, `With everything in this cart, ${lower(d)} would reach ${projected[d]}%, above the 90% cut-off.`];
       line.fit = FIT.RESTRICTED;
       line.locked = true;
+      line.lockReason ??= 'cut-off';
+      line.lockClass ??= d;
     }
+  }
+
+  // Past the full daily limit, counting the rest of the cart: a line adding 20% or more of a food
+  // type that is already over 100% without it is locked, under either G, balanced or not.
+  for (const line of evaluated) {
+    const without = Object.fromEntries(FOOD_CLASSES.map((c) => [c, round2(projected[c] - line.adds[c])]));
+    const past = pastLimitClass(without, line.adds);
+    if (!past) continue;
+    const perServing = line.meal[past] ?? 0;
+    const fits = perServing > 0 ? Math.max(0, Math.min(line.quantity - 1, Math.ceil(OVER_LIMIT_ADD / perServing) - 1)) : line.quantity;
+    line.fitsQuantity = Math.min(line.fitsQuantity ?? fits, fits);
+    if (line.lockReason !== 'past-limit') line.why = [...line.why, pastLimitWhy(past, without[past], line.adds[past])];
+    Object.assign(line, {
+      fit: FIT.RESTRICTED, locked: true, lockReason: 'past-limit', lockClass: past, pastLimitAt: without[past], lockAdds: line.adds[past],
+    });
   }
 
   const before = bandsFor(intake);

@@ -288,17 +288,29 @@ record('T77', 'Intake passes 100% of the daily limit', `Carbohydrates at ${after
 
 r = await checkoutCart(staff, one(id('Jollof')));
 record('T10', 'Check out a cart with a Restricted today line', 'Jollof rice and chicken (G = 1, carbohydrates Critical)', 'Checkout refused; nothing reserved',
-  `HTTP ${r.status}: ${r.data?.error}`, r.status === 409 && /restricted today/.test(r.data?.error ?? ''));
+  `HTTP ${r.status}: ${r.data?.error}`, r.status === 409 && /restricted today|locked today/.test(r.data?.error ?? ''));
 
-bought = await buy(staff, one(id('Fried plantain')));
-record('T11', 'Order a balanced meal at Critical', 'Fried plantain and beans (balanced)', 'Order accepted and paid',
+// Carbohydrates are now past 100% (T9), so dishes adding 20% or more of them are locked (T78);
+// a balanced meal that adds little still goes through.
+bought = await buy(staff, one(id('Moi moi (1 wrap)')));
+record('T11', 'Order a balanced meal at Critical that adds little of the over food type', 'Moi moi (1 wrap) (balanced, adds 13% carbohydrates)', 'Order accepted and paid',
   `Order ${bought.order?.status ?? bought.checkout.data?.error}`, bought.order?.status === 'paid');
 
-bought = await buy(staff, one(id('Akara')));
-const afterAkara = (await call('/catalogue', { cookie: staff })).data;
-record('T12', 'Intake passes 70% (High)', 'Order Akara and custard (balanced)',
-  'High warning issued', `Fats and oils ${afterAkara.intake.fat}% (${afterAkara.bands.fat})`,
-  afterAkara.bands.fat === 'High' && afterAkara.notifications.some((n) => n.foodClass === 'fat' && n.intakeLevel === 'High'));
+const afterMoimoi = (await call('/catalogue', { cookie: staff })).data;
+record('T12', 'Intake passes 70% (High)', 'Vitamins after Moi moi (1 wrap): 70% → 80%',
+  'High warning issued', `Vitamins ${afterMoimoi.intake.vitamin}% (${afterMoimoi.bands.vitamin})`,
+  afterMoimoi.bands.vitamin === 'High' && afterMoimoi.notifications.some((n) => n.foodClass === 'vitamin' && n.intakeLevel === 'High'));
+
+// T78: past 100% of the daily limit, a dish adding 20% or more of that food type is locked, even a
+// balanced one; under gentle guidance too (the new staff member's day, later, checks G = 0).
+const akara = afterMoimoi.catalogue.find((m) => m.id === id('Akara'));
+const akaraCheckout = await checkoutCart(staff, one(id('Akara')));
+record('T78', 'Past 100%: big additions are locked, balanced or not', `Carbohydrates at ${afterMoimoi.intake.carb}%; Akara and custard (balanced, adds 25% carbohydrates)`,
+  '"Not today" on the menu with the reason and alternatives; checkout refused (409)',
+  `Akara "${akara?.fit}" (${akara?.why?.[0]}); try: ${akara?.alternatives?.map((a) => a.text).join(', ')}; checkout HTTP ${akaraCheckout.status}`,
+  afterMoimoi.intake.carb > 100 && akara?.locked && akara.isBalanced && akara.fit === 'Restricted today'
+    && /past your full daily limit/.test(akara.why[0]) && akara.alternatives.length > 0
+    && akara.alternatives.every((a) => a.adds < 20) && akaraCheckout.status === 409);
 
 // ---------- G is fixed for the day ----------
 const staffCheckinSql = "SELECT * FROM daily_checkins WHERE user_id = (SELECT user_id FROM users WHERE email = 'staff@chopwise.ng') AND checkin_date = $1";

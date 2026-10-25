@@ -27,6 +27,9 @@ export const RESTRICTION_THRESHOLD = 90;
 // (agreed with the user). It doesn't change the bands or the lock, which stays at 90% under G = 1.
 export const DAILY_LIMIT = 100;
 export const OVER_LIMIT = 'Over'; // the warning level stored for it
+// Past the full daily limit, a dish that would add this much (% of RDI) or more of that food type is
+// locked, under either guidance level and even if balanced (agreed with the user).
+export const OVER_LIMIT_ADD = 20;
 
 // Balanced meal: every class between 5% and 35% of RDI (Definition of Terms 1.7).
 export const BALANCED_MIN = 5;

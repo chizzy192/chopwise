@@ -226,8 +226,10 @@ test('menu: under G = 1 one serving that would take the dish\'s class past 90% i
 });
 
 test('cart: a Restricted today line blocks checkout; a balanced line never does', () => {
+  // At 50%, Jollof takes carbohydrates to 98% (past the 90% cut-off); without the bowl they stay
+  // under 100%, so the past-the-daily-limit rule doesn't apply to the bowl.
   const c = evaluateCart({
-    gate: 1, intake: at({ carb: 95 }), meals,
+    gate: 1, intake: at({ carb: 50 }), meals,
     lines: [{ mealId: 1, quantity: 1 }, { mealId: 2, quantity: 1 }],
   });
   assert.deepEqual(c.blocked, [1]);
@@ -325,4 +327,39 @@ test('a third warning once a food type passes 100% of the daily limit, under eit
   assert.match(cart.warnings[0].message, /takes carbohydrates to 108% of your daily limit, past your full daily limit for today/);
   const under = evaluateCart({ gate: 0, intake: at({ carb: 50 }), meals: [jollof], lines: [{ mealId: 1, quantity: 1 }] });
   assert.equal(under.warnings[0].intakeLevel, 'Critical', '98% stays the 90% warning');
+});
+
+test('past 100% of the daily limit, a dish adding 20% or more of that food type is locked, under either G and even if balanced', () => {
+  for (const gate of [0, 1]) {
+    const r = evaluate({ gate, intake: at({ carb: 124 }), meals });
+    const byId = (id) => r.catalogue.find((m) => m.id === id);
+    assert.equal(byId(2).fit, 'Restricted today', `gate ${gate}: the balanced bowl adds 30% carbohydrates, so it is locked`);
+    assert.equal(byId(2).locked, true);
+    assert.equal(byId(2).lockClass, 'carb');
+    assert.match(byId(2).why[0], /^Carbohydrates are past your full daily limit today \(124%\)\. This adds 30%, and anything adding 20% or more of it is locked until midnight\.$/);
+    assert.equal(byId(3).locked, false, `gate ${gate}: grilled fish adds only 10% carbohydrates`);
+    // Its alternatives are dishes that add the least carbohydrates.
+    assert.deepEqual(byId(2).alternatives.map((a) => a.text), ['Adds 10% carbohydrates']);
+  }
+  assert.equal(evaluate({ gate: 0, intake: at({ carb: 100 }), meals }).catalogue.find((m) => m.id === 2).locked, false, 'exactly 100% is not past it');
+});
+
+test('cart: the past-the-daily-limit lock counts the other lines, and suggests a quantity that adds under 20%', () => {
+  const salad = { id: 4, name: 'Salad', carb: 12, protein: 15, fat: 10, vitamin: 32, mineral: 20, dominantClass: 'vitamin', isBalanced: true };
+  // 90% + Jollof 48% = 138% before the salad; 2 salads add 24% carbohydrates (locked), 1 adds 12% (fits).
+  const c = evaluateCart({ gate: 0, intake: at({ carb: 90 }), meals: [...meals, salad], lines: [{ mealId: 1, quantity: 1 }, { mealId: 4, quantity: 2 }] });
+  const saladLine = c.lines.find((l) => l.mealId === 4);
+  assert.equal(saladLine.locked, true);
+  assert.equal(saladLine.lockReason, 'past-limit');
+  assert.equal(saladLine.pastLimitAt, 138);
+  assert.equal(saladLine.lockAdds, 24);
+  assert.equal(saladLine.fitsQuantity, 1);
+  assert.equal(c.canCheckout, false, 'even under gentle guidance');
+  const one = evaluateCart({ gate: 0, intake: at({ carb: 90 }), meals: [...meals, salad], lines: [{ mealId: 1, quantity: 1 }, { mealId: 4, quantity: 1 }] });
+  assert.equal(one.lines.find((l) => l.mealId === 4).locked, false, 'one salad adds 12%, under 20%');
+  // Every line is judged against the rest of the cart: 90% + the salad's 12% = 102% without the
+  // Jollof, which then adds 48%, so the Jollof is the line that is locked.
+  const jollofLine = one.lines.find((l) => l.mealId === 1);
+  assert.equal(jollofLine.locked, true);
+  assert.equal(jollofLine.pastLimitAt, 102);
 });

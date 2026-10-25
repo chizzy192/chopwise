@@ -22,7 +22,7 @@ The written report (Chapters 1–4) describes this system, so the behaviour belo
   - **P1, P2:** 1 if, after that meal, any food class is above 70% of RDI. The older meal is applied first, then the recent one on top.
 - **Bands per food class:** Low 0–40%, Moderate >40–70%, High >70–90%, Critical >90%. Upper bounds are inclusive.
 - **Warnings:** above 70% (High), above 90% (Critical), and a third once a class passes **100% of the daily limit** (level `Over`, added at the user's request): "Carbohydrates intake is at 124% of your daily limit: you've gone past your full daily limit for today." The 100% warning shows under both guidance levels, in the cart (for the projected intake) and as a saved notification; exactly 100% is not past it. It doesn't change the bands or the lock, which stays at 90% under G = 1.
-- **Balanced meal:** every class between 5% and 35%. Balanced meals are **always exempt** from restriction and listed first.
+- **Balanced meal:** every class between 5% and 35%. Balanced meals are exempt from the 90% restriction and listed first. The one exception is the past-the-daily-limit lock (item 4).
 - **Dominant class:** the class with the highest % in a meal.
 
 ## Agreed changes to build
@@ -37,6 +37,7 @@ The written report (Chapters 1–4) describes this system, so the behaviour belo
    - **Never addable:** a Restricted today dish's Add button is disabled and replaced by "Not today" (the on-screen name for Restricted today, item 16), with the reason and the alternatives, on the menu and the dish page. The alternatives list only offers dishes that can be added.
    - **Server refusal:** the server returns 409 for a Restricted today line at cart evaluation (the body still carries the whole evaluation, so the cart can show the line), at checkout and at any add endpoint. It never trusts the client.
    - **Restricted inside the cart:** if a line becomes Restricted today because of another line, the cart marks it ("Not today: reduce or remove"), its counter can only go down, and checkout stays blocked until it is reduced or removed.
+   - **Past the daily limit (any G, added at the user's request):** once a food class is past 100% of the daily limit, any dish that would add 20% or more of that class is locked ("Not today"), under gentle and firm guidance alike, **balanced or not**. On the menu it is judged on one serving and today's paid intake; in the cart, on all of that line's plates against today's intake plus every other line (so another line can push a class past 100%). Smaller additions stay allowed. The why line says e.g. "Carbohydrates are past your full daily limit today (124%). This adds 25%, and anything adding 20% or more of it is locked until midnight." Checkout names the line, suggests the quantity that adds under 20%, or alternatives sorted by how little they add of that class. Constants: `DAILY_LIMIT = 100`, `OVER_LIMIT_ADD = 20`.
    - **Alternatives:** drawn from balanced meals and from unlocked, available meals whose dominant class is not Critical, sorted by how little they add to the locked meal's class (lowest first), up to 3, each shown with its contribution (e.g. "Adds 6% carbohydrates").
 5. **Delivery-app ordering:**
    - Dish cards with photo, name, price and RDI values.

@@ -79,7 +79,7 @@ export default function Order() {
 
       {restricted.length > 0 && (
         <section id="restricted" className="section" aria-labelledby="restricted-h">
-          <div className="section-title"><h2 id="restricted-h">Not today</h2><p className="hint">These would take a food type past the 90% cut-off, so they're locked until midnight. Try one of the suggestions.</p></div>
+          <div className="section-title"><h2 id="restricted-h">Not today</h2><p className="hint">These would add too much of a food type you've already had a lot of today, so they're locked until midnight. Tap Why? for the numbers, or try one of the suggestions.</p></div>
           <ul className="rows">{restricted.map((m) => <DishRow key={m.id} dish={m} />)}</ul>
         </section>
       )}

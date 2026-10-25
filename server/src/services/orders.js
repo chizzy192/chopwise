@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { pool } from '../db/pool.js';
 import { FOOD_CLASSES } from '../logic/constants.js';
 import { evaluateCart, scaleMeal, emptyIntake, addMeal, alternativesFor } from '../logic/engine.js';
-import { CLASS_LABELS } from '../logic/constants.js';
+import { CLASS_LABELS, OVER_LIMIT_ADD } from '../logic/constants.js';
 import {
   cartProblems, priceCart, nairaToKobo, platesLeft, stockLabel, checkPayment, MAX_QUANTITY, RESERVATION_MINUTES,
 } from '../logic/checkout.js';
@@ -117,12 +117,14 @@ export async function evaluateCartFor(userId, checkin, lines, date, db = pool) {
     const menu = await catalogueFor(userId, checkin, date, db);
     for (const line of engine.lines.filter((l) => l.locked)) {
       const dish = dishes.get(line.mealId);
-      const cls = CLASS_LABELS[line.dominantClass].toLowerCase();
-      let message = `${dish.name} is restricted today: with this order ${cls} would reach ${line.projectedDominant}% of your daily limit, above the 90% cut-off.`;
+      const cls = CLASS_LABELS[line.lockClass ?? line.dominantClass].toLowerCase();
+      let message = line.lockReason === 'past-limit'
+        ? `${dish.name} is locked today: ${cls} are past your full daily limit (${line.pastLimitAt}%), and this adds ${line.lockAdds}%. Anything adding ${OVER_LIMIT_ADD}% or more of it is locked until midnight.`
+        : `${dish.name} is restricted today: with this order ${cls} would reach ${line.projectedDominant}% of your daily limit, above the 90% cut-off.`;
       if (line.fitsQuantity > 0) {
         message += ` Lower it to ${line.fitsQuantity} to fit.`;
       } else {
-        const alts = alternativesFor(dish, menu.catalogue, intake);
+        const alts = alternativesFor({ ...dish, lockClass: line.lockClass }, menu.catalogue, intake);
         message += alts.length
           ? ` Remove it, or try ${alts.map((a) => `${a.name} (${a.text.toLowerCase()})`).join(' or ')}.`
           : ' Remove it to continue.';
