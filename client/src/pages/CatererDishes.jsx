@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, CLASSES, LABELS } from '../api.js';
 import { DishPhoto, formatKobo, Loading, Empty } from '../components.jsx';
+import { preparePhoto } from '../photoPrep.js';
+import { prefersReducedMotion } from '../motion.js';
 
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
-const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const blankRdi = Object.fromEntries(CLASSES.map((c) => [c, '']));
 
 // Mirrors the server's meal.js rules so caterers see the result while typing.
@@ -90,7 +90,7 @@ export default function CatererDishes() {
               <span>{d.soldOutToday ? 'Sold out today' : 'Available'}</span>
             </label>
             <div className="dish-actions">
-              <PhotoButton dish={d} onSaved={(text) => { setMsg(text); setError(''); load(); }} onError={(e) => { setMsg(''); setError(e); }} />
+              <PhotoButton dish={d} onSaved={() => { setError(''); load(); }} />
               <button className="quiet" onClick={() => { setEditing(d); setMsg(''); }}>Edit</button>
             </div>
           </li>
@@ -101,25 +101,31 @@ export default function CatererDishes() {
 }
 
 // Upload or replace a dish photo straight from the list. A new photo never needs approval.
-function PhotoButton({ dish, onSaved, onError }) {
+// Big phone photos are shrunk first (photoPrep.js); the result shows on this dish's own card.
+function PhotoButton({ dish, onSaved }) {
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null); // { ok, text }
   async function pick(e) {
     const chosen = e.target.files[0];
     e.target.value = '';
     if (!chosen) return;
-    if (!PHOTO_TYPES.includes(chosen.type)) return onError('Choose a JPEG, PNG or WebP photo');
-    if (chosen.size > MAX_PHOTO_BYTES) return onError('The photo must be 2 MB or smaller');
-    setBusy(true);
-    try { await uploadPhoto(dish.id, chosen); onSaved(`${dish.name}: photo saved.`); }
-    catch (err) { onError(err.message); }
+    setBusy(true); setNote(null);
+    try {
+      await uploadPhoto(dish.id, await preparePhoto(chosen));
+      setNote({ ok: true, text: 'Photo saved.' });
+      onSaved(`${dish.name}: photo saved.`);
+    } catch (err) { setNote({ ok: false, text: err.message }); }
     finally { setBusy(false); }
   }
   return (
-    <label className="btn quiet file-button">
-      {busy ? 'Uploading…' : dish.photoUrl ? 'Change photo' : 'Upload photo'}
-      <input type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" onChange={pick} disabled={busy}
-        aria-label={`${dish.photoUrl ? 'Change' : 'Upload'} photo for ${dish.name}`} />
-    </label>
+    <>
+      <label className="btn quiet file-button">
+        {busy ? 'Uploading…' : dish.photoUrl ? 'Change photo' : 'Upload photo'}
+        <input type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" onChange={pick} disabled={busy}
+          aria-label={`${dish.photoUrl ? 'Change' : 'Upload'} photo for ${dish.name}`} />
+      </label>
+      {note && <p className={`photo-note ${note.ok ? 'ok' : 'error'}`} role={note.ok ? 'status' : 'alert'}>{note.text}</p>}
+    </>
   );
 }
 
@@ -169,12 +175,21 @@ function DishForm({ dish, onCancel, onSaved }) {
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
-  function pickPhoto(e) {
+  // The form sits above the dish list; opened from a card further down, it would be out of sight.
+  const formRef = useRef(null);
+  const headingRef = useRef(null);
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    headingRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  async function pickPhoto(e) {
     const chosen = e.target.files[0];
     if (!chosen) return;
-    if (!PHOTO_TYPES.includes(chosen.type)) { e.target.value = ''; return setError('Choose a JPEG, PNG or WebP photo'); }
-    if (chosen.size > MAX_PHOTO_BYTES) { e.target.value = ''; return setError('The photo must be 2 MB or smaller'); }
-    setFile(chosen); setPreview(URL.createObjectURL(chosen)); setError('');
+    try {
+      const ready = await preparePhoto(chosen);
+      setFile(ready); setPreview(URL.createObjectURL(ready)); setError('');
+    } catch (err) { e.target.value = ''; setError(err.message); }
   }
 
   async function submit(e) {
@@ -210,8 +225,8 @@ function DishForm({ dish, onCancel, onSaved }) {
   }
 
   return (
-    <form className="panel dish-form" onSubmit={submit} noValidate>
-      <h2>{isNew ? 'Add a dish' : `Edit ${dish.name}`}</h2>
+    <form className="panel dish-form" onSubmit={submit} noValidate ref={formRef}>
+      <h2 tabIndex={-1} ref={headingRef}>{isNew ? 'Add a dish' : `Edit ${dish.name}`}</h2>
       {isNew && (
         <fieldset className="choice-row">
           <legend className="sr-only">Type of dish</legend>
@@ -262,7 +277,7 @@ function DishForm({ dish, onCancel, onSaved }) {
         <div>
           <label htmlFor="d-photo">{dish?.photoUrl ? 'Replace photo' : 'Photo (optional)'}</label>
           <input id="d-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={pickPhoto} />
-          <p className="hint">JPEG, PNG or WebP, up to 2 MB. A new photo doesn't need approval.</p>
+          <p className="hint">JPEG, PNG or WebP. Big phone photos are made smaller before upload. A new photo doesn't need approval.</p>
         </div>
       </div>
 

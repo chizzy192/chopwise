@@ -119,7 +119,7 @@ The written report (Chapters 1–4) describes this system, so the behaviour belo
 - Helmet security headers; strict CORS.
 - Validate every request body with Zod.
 - Role checks on **every** server route.
-- Image uploads: allow only JPEG, PNG and WebP (checked from the contents), at most 2 MB, re-encoded to WebP with sharp, stored with generated names. Photos are stored in PostgreSQL (`dish_photos`), not on disk, because the host wipes its disk on restart; they are served at `/uploads/dishes/<id>.webp` with nosniff and a one-year cache.
+- Image uploads: allow only JPEG, PNG and WebP (checked from the contents), at most 2 MB (the caterer's browser shrinks bigger phone photos to at most 1600 px JPEG before upload; the server limit stays), re-encoded to WebP with sharp, stored with generated names. Photos are stored in PostgreSQL (`dish_photos`), not on disk, because the host wipes its disk on restart; they are served at `/uploads/dishes/<id>.webp` with nosniff and a one-year cache.
 - Audit log of admin actions.
 - Secrets only in `.env`. Never commit them.
 

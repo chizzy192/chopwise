@@ -307,3 +307,8 @@ td select { inline-size: auto; min-inline-size: 8.5rem; }
 }
 
 @keyframes menu-in { from { transform: translateX(100%); opacity: 0; } }
+
+/* A dish card's own photo result ("Photo saved." or what went wrong). */
+.photo-note { flex-basis: 100%; margin: 0; font-size: var(--text-meta); }
+.dish-form h2:focus { outline: none; }
+.dish-form { scroll-margin-top: calc(var(--tap) + var(--space-5)); }

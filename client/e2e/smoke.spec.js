@@ -11,6 +11,14 @@ const staff = { name: 'UI Test Staff', email: `ui.${Date.now()}@chopwise.ng`, pa
 const DEMO = 'password123';
 const newCaterer = { name: 'UI Test Kitchen', email: `kitchen.${Date.now()}@chopwise.ng`, temp: 'temporary-pass-1', reset: 'reset-temp-pass-2', own: 'kitchen-own-pass-1' };
 // A valid 1 × 1 PNG; the server re-encodes every upload to WebP.
+// A phone-sized photo (random pixels, so it can't compress): about 5 MB, over the 2 MB upload limit.
+const bigPhoto = async () => {
+  const { createRequire } = await import('node:module');
+  const sharp = createRequire(new URL('../../server/package.json', import.meta.url))('sharp');
+  const raw = Buffer.alloc(1300 * 1300 * 3);
+  for (let i = 0; i < raw.length; i += 1) raw[i] = (i * 2654435761) >>> 24;
+  return sharp(raw, { raw: { width: 1300, height: 1300, channels: 3 } }).png({ compressionLevel: 0 }).toBuffer();
+};
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 test('landing: explains ChopWise, runs the gate demo, and links to log in and sign up', async ({ page }) => {
@@ -456,10 +464,28 @@ test('caterer: upload a dish photo and set today\'s plates, both found in the na
   await expectClickable(row.locator('label.file-button'));
   await expect(row.locator('img')).toHaveCount(0);
   await row.getByLabel('Upload photo for Moi moi (1 wrap)').setInputFiles({ name: 'moimoi.png', mimeType: 'image/png', buffer: PNG });
-  await expect(page.getByText('Moi moi (1 wrap): photo saved.')).toBeVisible();
+  await expect(row.getByText('Photo saved.'), 'the result shows on the dish\'s own card').toBeVisible();
   await expect(row.locator('img')).toHaveAttribute('src', /\/uploads\/dishes\/[0-9a-f-]+\.webp$/);
   await expect(row.getByText('Change photo')).toBeVisible();
   await expectTouchTargets(page);
+
+  // A phone photo over 2 MB is made smaller in the browser and uploads, on a card far down the list.
+  const big = await bigPhoto();
+  expect(big.length, 'the test photo really is over 2 MB').toBeGreaterThan(2 * 1024 * 1024);
+  const lastCard = page.locator('.dish-row').last();
+  await lastCard.scrollIntoViewIfNeeded();
+  // The name alone, without the card's "Add-on" or "Extra" label.
+  const lastName = (await lastCard.locator('.dish-name').evaluate((el) => el.firstChild.textContent)).trim();
+  await lastCard.locator('input[type=file]').setInputFiles({ name: 'phone.png', mimeType: 'image/png', buffer: big });
+  await expect(lastCard.getByText('Photo saved.')).toBeVisible({ timeout: 20_000 });
+  await expect(lastCard.locator('img')).toHaveAttribute('src', /\/uploads\/dishes\/[0-9a-f-]+\.webp$/);
+
+  // Edit on that last card brings the form into view, with focus on its heading.
+  await lastCard.getByRole('button', { name: 'Edit' }).click();
+  const heading = page.getByRole('heading', { name: `Edit ${lastName}` });
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+  await page.getByRole('button', { name: 'Cancel' }).click();
 
   // Stock: Today's stock lists every dish with its plates-left field.
   await nav.getByRole('link', { name: "Today's stock" }).click();
