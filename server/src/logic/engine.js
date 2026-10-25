@@ -1,5 +1,5 @@
 import {
-  FOOD_CLASSES, CLASS_LABELS, BANDS, BAND_ORDER, FIT, LOW_MAX, WARNING_THRESHOLD, RESTRICTION_THRESHOLD,
+  FOOD_CLASSES, CLASS_LABELS, BANDS, BAND_ORDER, FIT, LOW_MAX, WARNING_THRESHOLD, RESTRICTION_THRESHOLD, DAILY_LIMIT, OVER_LIMIT,
 } from './constants.js';
 
 export function emptyIntake() {
@@ -176,6 +176,13 @@ export function evaluate({ gate, intake, meals }) {
           ? `${CLASS_LABELS[c]} intake is above 90% of your daily limit. Meals that are mostly ${lower(c)} are locked for today.`
           : `${CLASS_LABELS[c]} intake is above 90% of your daily limit. Try to avoid meals that are mostly ${lower(c)} today.`,
       });
+      // A third warning once the full daily limit is passed, whatever the guidance level.
+      if ((intake[c] ?? 0) > DAILY_LIMIT) {
+        notifications.push({
+          foodClass: c, intakeLevel: OVER_LIMIT,
+          message: `${CLASS_LABELS[c]} intake is at ${intake[c]}% of your daily limit: you've gone past your full daily limit for today.`,
+        });
+      }
     } else if (bands[c] === BANDS.HIGH) {
       notifications.push({
         foodClass: c, intakeLevel: BANDS.HIGH,
@@ -248,12 +255,17 @@ export function evaluateCart({ gate, intake, meals, lines }) {
     .filter((c) => projected[c] > (intake[c] ?? 0))
     .filter((c) => projectedBands[c] === BANDS.CRITICAL
       || (projectedBands[c] === BANDS.HIGH && rank(before[c]) < rank(BANDS.HIGH)))
-    .map((c) => ({
-      foodClass: c, intakeLevel: projectedBands[c],
-      message: projectedBands[c] === BANDS.CRITICAL
-        ? `This order takes ${lower(c)} to ${projected[c]}% of your daily limit, above the 90% cut-off.`
-        : `This order takes ${lower(c)} to ${projected[c]}% of your daily limit, above 70%.`,
-    }));
+    .map((c) => {
+      if (projected[c] > DAILY_LIMIT) {
+        return { foodClass: c, intakeLevel: OVER_LIMIT, message: `This order takes ${lower(c)} to ${projected[c]}% of your daily limit, past your full daily limit for today.` };
+      }
+      return {
+        foodClass: c, intakeLevel: projectedBands[c],
+        message: projectedBands[c] === BANDS.CRITICAL
+          ? `This order takes ${lower(c)} to ${projected[c]}% of your daily limit, above the 90% cut-off.`
+          : `This order takes ${lower(c)} to ${projected[c]}% of your daily limit, above 70%.`,
+      };
+    });
 
   const blocked = evaluated.filter((l) => l.locked).map((l) => l.mealId);
   return {

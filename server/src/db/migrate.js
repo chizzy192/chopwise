@@ -57,6 +57,8 @@ const STEPS = [
        UPDATE order_items SET water_quantity = quantity WHERE dish_type = 'meal';
      END IF;
    END $$`,
+  // A third warning level, for intake past 100% of the daily limit.
+  "ALTER TYPE intake_level ADD VALUE IF NOT EXISTS 'Over'",
   // Dish photos live in the database, because the host's disk is wiped on every restart.
   `CREATE TABLE IF NOT EXISTS dish_photos (
      photo_id      UUID         PRIMARY KEY,

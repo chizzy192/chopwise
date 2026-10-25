@@ -42,6 +42,7 @@ Intake comes from orders and the daily check-in; there is no manual meal logging
 
 - **Food classes:** carb, protein, fat, vitamin, mineral. Meal values are % of daily RDI per serving; quantity multiplies them.
 - **Bands per class:** Low 0–40%, Moderate >40–70%, High >70–90%, Critical >90% (upper bounds inclusive).
+- **Warnings:** at 70%, at 90% and once a class passes 100% of the daily limit ("you've gone past your full daily limit for today"), under either guidance level.
 - **P1, P2:** 1 if, after that meal, any class is above 70% of RDI. The older meal is applied first, then the recent one on top.
 - **Balanced meal:** every class between 5% and 35%. Balanced meals are always exempt from restriction and listed first.
 - **Dominant class:** the class with the highest % in a meal.

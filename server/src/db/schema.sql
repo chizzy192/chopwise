@@ -1,7 +1,8 @@
 -- ChopWise database schema (Chapter 3.4.6, Tables 3.2 to 3.7)
 
 CREATE TYPE user_role AS ENUM ('staff', 'admin', 'caterer');
-CREATE TYPE intake_level AS ENUM ('High', 'Critical');
+-- Warning levels: above 70% (High), above 90% (Critical), above 100% of the daily limit (Over).
+CREATE TYPE intake_level AS ENUM ('High', 'Critical', 'Over');
 
 -- password_hash holds an Argon2id hash; failed_attempts and locked_until drive account lockout.
 CREATE TABLE users (

@@ -30,6 +30,7 @@ export default function AdminReport() {
         <div className="stat"><b>{r.activeUsers}</b>Staff with intake today</div>
         <div className="stat"><b>{r.notifications.High || 0}</b>High warnings</div>
         <div className="stat"><b>{r.notifications.Critical || 0}</b>Critical warnings</div>
+        <div className="stat"><b>{r.notifications.Over || 0}</b>Past the daily limit</div>
       </div>
       <FeedbackSummary f={r.feedback} />
       <div className="report-grid">

@@ -21,6 +21,7 @@ The written report (Chapters 1–4) describes this system, so the behaviour belo
   - **H:** 1 if the user declared a diet-related condition. (There is no "well controlled through diet" option; it was removed at the user's request.)
   - **P1, P2:** 1 if, after that meal, any food class is above 70% of RDI. The older meal is applied first, then the recent one on top.
 - **Bands per food class:** Low 0–40%, Moderate >40–70%, High >70–90%, Critical >90%. Upper bounds are inclusive.
+- **Warnings:** above 70% (High), above 90% (Critical), and a third once a class passes **100% of the daily limit** (level `Over`, added at the user's request): "Carbohydrates intake is at 124% of your daily limit: you've gone past your full daily limit for today." The 100% warning shows under both guidance levels, in the cart (for the projected intake) and as a saved notification; exactly 100% is not past it. It doesn't change the bands or the lock, which stays at 90% under G = 1.
 - **Balanced meal:** every class between 5% and 35%. Balanced meals are **always exempt** from restriction and listed first.
 - **Dominant class:** the class with the highest % in a meal.
 

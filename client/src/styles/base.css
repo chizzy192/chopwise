@@ -84,6 +84,8 @@ legend { font-weight: 500; margin-bottom: var(--space-2); padding: 0; }
 /* Warnings: a tinted panel with a thin full outline in the same hue (not a thick side stripe). */
 .notice { border: 1px solid var(--warning); background: var(--warning-wash); padding: var(--space-3) var(--space-4); border-radius: var(--radius-small); margin-bottom: var(--space-2); }
 .notice.Critical { border-color: var(--danger); background: var(--danger-wash); }
+/* Past the full daily limit (100%): the strongest warning, with a heavier border and weight. */
+.notice.Over { border-color: var(--danger); border-width: 2px; background: var(--danger-wash); font-weight: 500; }
 
 /* Tables */
 /* position: relative keeps absolutely positioned children (such as .sr-only text) inside the scroll box. */

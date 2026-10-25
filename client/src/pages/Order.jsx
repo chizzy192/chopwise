@@ -48,7 +48,7 @@ export default function Order() {
   return (
     <div className="home">
       <GuidanceStrip data={data} />
-      {data.notifications.map((n) => <p key={n.foodClass} className={`notice ${n.intakeLevel}`} role="status">{n.message}</p>)}
+      {data.notifications.map((n) => <p key={`${n.foodClass}-${n.intakeLevel}`} className={`notice ${n.intakeLevel}`} role="status">{n.message}</p>)}
 
       <CatererCover data={data} />
 

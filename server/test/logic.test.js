@@ -172,7 +172,8 @@ test('cart: projected intake sums every line; under G = 0 going past 90% only wa
   });
   assert.equal(c.projected.carb, 126);
   assert.equal(c.projectedBands.carb, 'Critical');
-  assert.ok(c.warnings.some((w) => w.foodClass === 'carb' && w.intakeLevel === 'Critical'));
+  // 126% is past the full daily limit, so the cart's warning is the 100% one.
+  assert.ok(c.warnings.some((w) => w.foodClass === 'carb' && w.intakeLevel === 'Over'));
   assert.deepEqual(c.blocked, []);
   assert.equal(c.canCheckout, true);
 });
@@ -307,4 +308,21 @@ test('feedback answers: scores 1 to 5, yes / no / sometimes, comment up to 500 c
   assert.equal(feedbackBody.safeParse({ ...ok, changedOrder: 'maybe' }).success, false);
   assert.equal(feedbackBody.safeParse({ ...ok, comment: 'x'.repeat(501) }).success, false);
   assert.equal(feedbackBody.safeParse({ ...ok, userId: 3 }).success, false, 'no unknown fields');
+});
+
+test('a third warning once a food type passes 100% of the daily limit, under either guidance level', async () => {
+  const { evaluate, evaluateCart, emptyIntake } = await import('../src/logic/engine.js');
+  const at = (over) => ({ ...emptyIntake(), ...over });
+  for (const gate of [0, 1]) {
+    const over = evaluate({ gate, intake: at({ carb: 124 }), meals: [] }).notifications.filter((n) => n.foodClass === 'carb');
+    assert.deepEqual(over.map((n) => n.intakeLevel), ['Critical', 'Over'], `gate ${gate}: the 90% and the 100% warnings`);
+    assert.match(over[1].message, /^Carbohydrates intake is at 124% of your daily limit: you've gone past your full daily limit for today\.$/);
+  }
+  assert.deepEqual(evaluate({ gate: 0, intake: at({ carb: 100 }), meals: [] }).notifications.map((n) => n.intakeLevel), ['Critical'], 'exactly 100% is not past it');
+  const jollof = { id: 1, name: 'Jollof', carb: 48, protein: 22, fat: 18, vitamin: 7, mineral: 5, dominantClass: 'carb', isBalanced: false };
+  const cart = evaluateCart({ gate: 0, intake: at({ carb: 60 }), meals: [jollof], lines: [{ mealId: 1, quantity: 1 }] });
+  assert.deepEqual(cart.warnings.map((w) => [w.foodClass, w.intakeLevel]), [['carb', 'Over']]);
+  assert.match(cart.warnings[0].message, /takes carbohydrates to 108% of your daily limit, past your full daily limit for today/);
+  const under = evaluateCart({ gate: 0, intake: at({ carb: 50 }), meals: [jollof], lines: [{ mealId: 1, quantity: 1 }] });
+  assert.equal(under.warnings[0].intakeLevel, 'Critical', '98% stays the 90% warning');
 });

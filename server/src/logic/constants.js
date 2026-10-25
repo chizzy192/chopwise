@@ -23,6 +23,10 @@ export const BAND_ORDER = [BANDS.LOW, BANDS.MODERATE, BANDS.HIGH, BANDS.CRITICAL
 export const LOW_MAX = 40;
 export const WARNING_THRESHOLD = 70;
 export const RESTRICTION_THRESHOLD = 90;
+// The full daily limit (100% of RDI). Passing it adds a third warning, on top of 70% and 90%
+// (agreed with the user). It doesn't change the bands or the lock, which stays at 90% under G = 1.
+export const DAILY_LIMIT = 100;
+export const OVER_LIMIT = 'Over'; // the warning level stored for it
 
 // Balanced meal: every class between 5% and 35% of RDI (Definition of Terms 1.7).
 export const BALANCED_MIN = 5;

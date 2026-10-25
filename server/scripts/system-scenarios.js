@@ -277,6 +277,15 @@ record('T9', 'Intake passes 90% (Critical)', 'Order Yam porridge with vegetables
     && altNames.join('|') === 'Suya and onions|Vegetable salad with egg|Grilled fish and vegetables'
     && lockedJollof.alternatives[0].text === 'Adds 6% carbohydrates');
 
+// T77: past 100% of the daily limit, a third warning appears and is saved with the others.
+const saved77 = (await call('/notifications', { cookie: staff })).data;
+record('T77', 'Intake passes 100% of the daily limit', `Carbohydrates at ${after.intake.carb}% after T9`,
+  'A third warning ("past your full daily limit") on the menu and in Notifications, as well as the 90% one',
+  `Menu: ${after.notifications.filter((n) => n.foodClass === 'carb').map((n) => n.intakeLevel).join(' + ')}; saved: ${saved77.filter((n) => n.food_class === 'carb').map((n) => n.intake_level).join(' + ')}`,
+  after.intake.carb > 100 && after.notifications.some((n) => n.foodClass === 'carb' && n.intakeLevel === 'Over')
+    && saved77.some((n) => n.food_class === 'carb' && n.intake_level === 'Over' && /past your full daily limit/.test(n.message))
+    && saved77.some((n) => n.food_class === 'carb' && n.intake_level === 'Critical'));
+
 r = await checkoutCart(staff, one(id('Jollof')));
 record('T10', 'Check out a cart with a Restricted today line', 'Jollof rice and chicken (G = 1, carbohydrates Critical)', 'Checkout refused; nothing reserved',
   `HTTP ${r.status}: ${r.data?.error}`, r.status === 409 && /restricted today/.test(r.data?.error ?? ''));
@@ -623,7 +632,7 @@ const softCart = (await call('/cart/evaluate', { method: 'POST', cookie: newStaf
 record('T62', 'Going past 90% under soft guidance', 'G = 0; cart: 2 × Jollof rice and chicken (carbohydrates to over 90%)',
   'Checkout allowed with a strong warning; nothing locked',
   `canCheckout=${softCart.canCheckout}; warnings: ${softCart.warnings.map((w) => w.message).join(' | ')}`,
-  softCart.canCheckout === true && softCart.warnings.some((w) => w.foodClass === 'carb' && w.intakeLevel === 'Critical'));
+  softCart.canCheckout === true && softCart.warnings.some((w) => w.foodClass === 'carb' && ['Critical', 'Over'].includes(w.intakeLevel)));
 
 // T64: extras with RDI values (yoghurt) count toward intake; add-ons (water) never do.
 const yoghurt = await dishNamed('Yoghurt');
