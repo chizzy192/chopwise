@@ -19,3 +19,5 @@ playwright-report/
 # (The only uploaded images are caterers' dish photos, which live in the database.)
 docs/screenshots/
 client/e2e/.results/
+# Real dish photos copied from the database for local sample data (npm run photos:export).
+server/sample-photos/

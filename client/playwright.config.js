@@ -26,7 +26,8 @@ export default defineConfig({
       command: 'node scripts/ui-server.js',
       cwd: '../server',
       url: `${API}/api/auth/me`,
-      env: { PORT: '4100', CLIENT_ORIGIN: WEB },
+      // Screenshots show the real dish photos (server/sample-photos); the smoke tests start without them.
+      env: { PORT: '4100', CLIENT_ORIGIN: WEB, SAMPLE_PHOTOS: process.env.SCREENSHOTS ? '1' : '0' },
       timeout: 120_000,
       stdout: 'pipe',
     },

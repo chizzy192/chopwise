@@ -480,12 +480,24 @@ test('caterer: upload a dish photo and set today\'s plates, both found in the na
   await expect(lastCard.getByText('Photo saved.')).toBeVisible({ timeout: 20_000 });
   await expect(lastCard.locator('img')).toHaveAttribute('src', /\/uploads\/dishes\/[0-9a-f-]+\.webp$/);
 
-  // Edit on that last card brings the form into view, with focus on its heading.
-  await lastCard.getByRole('button', { name: 'Edit' }).click();
-  const heading = page.getByRole('heading', { name: `Edit ${lastName}` });
+  // Edit on that last card opens the form in a pop-up, with focus on its heading.
+  const edit = lastCard.getByRole('button', { name: `Edit ${lastName}` });
+  await edit.click();
+  const dialog = page.getByRole('dialog', { name: `Edit ${lastName}` });
+  await expect(dialog).toBeVisible();
+  const heading = dialog.getByRole('heading', { name: `Edit ${lastName}` });
   await expect(heading).toBeFocused();
   await expect(heading).toBeInViewport();
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expectClickable(dialog.getByRole('button', { name: 'Save dish' }));
+  await expectTouchTargets(page);
+  // ✕ (top right) closes it and focus goes back to that Edit button; Escape closes it too.
+  await dialog.getByRole('button', { name: 'Close without saving' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(edit).toBeFocused();
+  await edit.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
 
   // Stock: Today's stock lists every dish with its plates-left field.
   await nav.getByRole('link', { name: "Today's stock" }).click();

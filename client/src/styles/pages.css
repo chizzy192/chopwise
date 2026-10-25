@@ -311,4 +311,6 @@ td select { inline-size: auto; min-inline-size: 8.5rem; }
 /* A dish card's own photo result ("Photo saved." or what went wrong). */
 .photo-note { flex-basis: 100%; margin: 0; font-size: var(--text-meta); }
 .dish-form h2:focus { outline: none; }
-.dish-form { scroll-margin-top: calc(var(--tap) + var(--space-5)); }
+
+/* The dish form opens as a pop-up: wider than the other pop-ups, for the five nutrition fields. */
+.modal.dish-modal { inline-size: min(48rem, 100%); margin: 0; }

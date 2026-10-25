@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { api, CLASSES, LABELS } from '../api.js';
 import { DishPhoto, formatKobo, Loading, Empty } from '../components.jsx';
 import { preparePhoto } from '../photoPrep.js';
-import { prefersReducedMotion } from '../motion.js';
 
 const blankRdi = Object.fromEntries(CLASSES.map((c) => [c, '']));
 
@@ -32,6 +31,9 @@ const STATUS_CLASS = {
 export default function CatererDishes() {
   const [dishes, setDishes] = useState([]);
   const [editing, setEditing] = useState(null); // null, 'new' or a dish
+  const opener = useRef(null); // the Add dish or Edit button, which gets focus back when the pop-up closes
+  const openForm = (what) => { opener.current = document.activeElement; setEditing(what); setMsg(''); };
+  const closeForm = () => { setEditing(null); opener.current?.focus?.(); };
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
@@ -48,25 +50,28 @@ export default function CatererDishes() {
     } catch (e) { setError(e.message); }
   }
 
-  const done = (text) => { setEditing(null); setMsg(text); setError(''); load(); };
+  const done = (text) => { closeForm(); setMsg(text); setError(''); load(); };
 
   return (
     <>
       <div className="page-head">
         <h1>My dishes</h1>
-        {!editing && <button onClick={() => { setEditing('new'); setMsg(''); }}>Add dish</button>}
+        <button onClick={() => openForm('new')}>Add dish</button>
       </div>
       <p className="hint">Meals and extras need an admin's approval before staff can see them. Sold out lasts for today only. Upload a photo from each dish's row, and set plates on <Link to="/caterer/stock">Today's stock</Link>.</p>
       {msg && <p className="ok" role="status">{msg}</p>}
       {error && <p className="error" role="alert">{error}</p>}
 
       {editing && (
-        <DishForm
-          key={editing === 'new' ? 'new' : editing.id}
-          dish={editing === 'new' ? null : editing}
-          onCancel={() => setEditing(null)}
-          onSaved={done}
-        />
+        <div className="modal-layer">
+          <div className="scrim" onClick={closeForm} aria-hidden="true" />
+          <DishForm
+            key={editing === 'new' ? 'new' : editing.id}
+            dish={editing === 'new' ? null : editing}
+            onCancel={closeForm}
+            onSaved={done}
+          />
+        </div>
       )}
 
       {!loaded && !error && <Loading label="Loading your dishes…" />}
@@ -91,7 +96,7 @@ export default function CatererDishes() {
             </label>
             <div className="dish-actions">
               <PhotoButton dish={d} onSaved={() => { setError(''); load(); }} />
-              <button className="quiet" onClick={() => { setEditing(d); setMsg(''); }}>Edit</button>
+              <button className="quiet" onClick={() => openForm(d)} aria-label={`Edit ${d.name}`}>Edit</button>
             </div>
           </li>
         ))}
@@ -175,12 +180,13 @@ function DishForm({ dish, onCancel, onSaved }) {
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
-  // The form sits above the dish list; opened from a card further down, it would be out of sight.
-  const formRef = useRef(null);
+  // A pop-up over the dish list: focus starts on its heading, and Escape closes it.
   const headingRef = useRef(null);
   useEffect(() => {
-    formRef.current?.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-    headingRef.current?.focus({ preventScroll: true });
+    headingRef.current?.focus();
+    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
 
   async function pickPhoto(e) {
@@ -225,8 +231,11 @@ function DishForm({ dish, onCancel, onSaved }) {
   }
 
   return (
-    <form className="panel dish-form" onSubmit={submit} noValidate ref={formRef}>
-      <h2 tabIndex={-1} ref={headingRef}>{isNew ? 'Add a dish' : `Edit ${dish.name}`}</h2>
+    <form className="panel modal dish-form dish-modal" onSubmit={submit} noValidate role="dialog" aria-modal="true" aria-labelledby="dish-form-h">
+      <button type="button" className="quiet icon-button modal-close" onClick={onCancel} aria-label="Close without saving">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+      </button>
+      <h2 id="dish-form-h" tabIndex={-1} ref={headingRef}>{isNew ? 'Add a dish' : `Edit ${dish.name}`}</h2>
       {isNew && (
         <fieldset className="choice-row">
           <legend className="sr-only">Type of dish</legend>

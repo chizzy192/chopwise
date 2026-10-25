@@ -69,7 +69,7 @@ export default function DishDetail() {
               {dish.isBalanced && <p className="hint">Every food type is between 5% and 35%, so this meal is balanced and never restricted.</p>}
             </section>
           ) : <p className="hint">Add-ons have no nutrition values and don't count towards your intake.</p>}
-          {dish.type === 'meal' && <p className="hint">Comes with one bottle of water at no charge.</p>}
+          {dish.type === 'meal' && <p className="hint">A bottle of water is added with each plate, at the standard price. You can remove it in your cart.</p>}
           {dish.type === 'extra' && <p className="hint">An extra: it counts towards your intake like a meal, and a cart still needs a meal.</p>}
           <div className="actions">
             {dish.unavailable

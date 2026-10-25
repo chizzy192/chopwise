@@ -11,6 +11,7 @@ import { hashPassword } from '../services/passwords.js';
 import { todayInLagos, addDays } from '../logic/time.js';
 import { vatKobo } from '../logic/checkout.js';
 import { DEMO_PASSWORD, DEMO_USERS, accountsFromEnv } from './accounts.js';
+import { attachSamplePhotos } from './samplePhotos.js';
 
 // Demo meals. Percentages are illustrative values a caterer would enter (% of daily RDI per serving).
 const MEALS = [
@@ -105,8 +106,8 @@ export async function seed(db = pool) {
     [ids['staff@chopwise.ng'], ids['staff2@chopwise.ng']],
   );
 
-  // Sample meals start approved, with their approved RDI values recorded. No photos: the
-  // placeholder shows until the caterer uploads real ones.
+  // Sample meals start approved, with their approved RDI values recorded. Photos come from
+  // server/sample-photos/ if that folder exists (npm run photos:export); otherwise the placeholder shows.
   const mealIds = {};
   const catererId = ids[caterer.email];
   // The dominant class and balanced flag come from the same logic the app uses (logic/meal.js).
@@ -166,7 +167,8 @@ export async function seed(db = pool) {
   await db.query('UPDATE meals SET stock_date = $1, plates_left = CASE WHEN dish_type = $2 THEN 50 ELSE 20 END WHERE caterer_id = $3',
     [todayInLagos(), 'addon', catererId]);
 
-  console.log(`Sample data added: ${DEMO_USERS.length + 1} users, ${MEALS.length} meals, ${EXTRAS.length} extras, ${ADD_ONS.length} add-ons.`);
+  const photos = await attachSamplePhotos(db, catererId);
+  console.log(`Sample data added: ${DEMO_USERS.length + 1} users, ${MEALS.length} meals, ${EXTRAS.length} extras, ${ADD_ONS.length} add-ons, ${photos} dish photos.`);
   printAccounts(admin, caterer);
   return true;
 }

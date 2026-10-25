@@ -18,6 +18,22 @@ const post = (page, url, data, method = 'post') => page.request[method](url, { d
 async function settle(page) {
   await page.waitForLoadState('networkidle');
   await page.evaluate(() => document.fonts.ready);
+  // Dish photos load lazily (only when scrolled to); a full-page screenshot doesn't scroll. So scroll
+  // down the page step by step, as a person would, then wait until every photo has been drawn.
+  const scrollY = await page.evaluate(() => window.scrollY);
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y < height; y += 600) {
+    await page.evaluate((to) => window.scrollTo(0, to), y);
+    await page.waitForTimeout(60);
+  }
+  await page.waitForLoadState('networkidle');
+  const broken = await page.evaluate(async () => {
+    const imgs = [...document.querySelectorAll('img')];
+    await Promise.all(imgs.map((img) => img.decode().catch(() => null)));
+    return imgs.filter((img) => !img.naturalWidth).map((img) => img.src);
+  });
+  if (broken.length) console.log(`Photos that did not load on ${page.url()}: ${broken.join(', ')}`);
+  await page.evaluate((to) => window.scrollTo(0, to), scrollY);
 }
 
 // Cart → checkout → mock Paystack → verify, through the API.
@@ -94,7 +110,8 @@ test('staff with a declared condition: firm guidance, carbohydrates past the cut
   await page.getByRole('button', { name: /: why\?$/ }).first().click();
   await shot(page, '13-fit-why-popover', false);
   await page.goto(`/dish/${id('Jollof')}`); await settle(page); await shot(page, '14-dish-detail-not-today');
-  await page.goto(`/dish/${id('Balanced lunch')}`); await settle(page);
+  // Carbohydrates are past 100% here, so the cart uses a balanced dish that adds little of them (8%).
+  await page.goto(`/dish/${id('Vegetable salad')}`); await settle(page);
   await page.getByRole('button', { name: /^Add .+ to cart$/ }).click();
   await page.getByRole('button', { name: /^Add one / }).click();
   await page.getByRole('button', { name: /^Cart, / }).click();
