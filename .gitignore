@@ -14,3 +14,8 @@ dist/
 test-results/
 playwright-report/
 .claude/settings.local.json
+
+# Report screenshots and Playwright results stay on this computer; they are not uploaded.
+# (The only uploaded images are caterers' dish photos, which live in the database.)
+docs/screenshots/
+client/e2e/.results/
