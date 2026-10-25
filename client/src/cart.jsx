@@ -17,6 +17,9 @@ function save(key, lines) {
   try { localStorage.setItem(key, JSON.stringify({ date: lagosToday(), lines })); } catch { /* storage unavailable: the cart lasts for this visit */ }
 }
 
+// What the server needs: dish, quantity and, for a meal whose bottled water was removed, water: false.
+export const requestLines = (lines) => lines.map(({ dishId, quantity, water }) => ({ dishId, quantity, ...(water === false ? { water: false } : {}) }));
+
 const CartContext = createContext(null);
 export const useCart = () => useContext(CartContext);
 
@@ -46,7 +49,7 @@ export function CartProvider({ userId, children }) {
     let cancelled = false;
     setEvaluating(true);
     const t = setTimeout(() => {
-      api('/cart/evaluate', { method: 'POST', body: { lines: lines.map(({ dishId, quantity }) => ({ dishId, quantity })) } })
+      api('/cart/evaluate', { method: 'POST', body: { lines: requestLines(lines) } })
         .then((r) => { if (!cancelled) setEvaluation(r); })
         // 409: a line is Restricted today. The body is still the full evaluation, so the cart can show it.
         .catch((e) => {
@@ -67,7 +70,9 @@ export function CartProvider({ userId, children }) {
     const otherCaterer = lines.length > 0 && lines[0].catererId !== dish.catererId;
     if (otherCaterer && !replace && quantity > 0) return 'conflict';
     const base = otherCaterer ? [] : lines;
-    const line = { dishId: dish.id, quantity, name: dish.name, priceKobo: dish.priceKobo, catererId: dish.catererId, type: dish.type, photoUrl: dish.photoUrl };
+    // A meal keeps its bottled water choice (on unless removed) when its quantity changes.
+    const water = base.find((l) => l.dishId === dish.id)?.water ?? true;
+    const line = { dishId: dish.id, quantity, name: dish.name, priceKobo: dish.priceKobo, catererId: dish.catererId, type: dish.type, photoUrl: dish.photoUrl, water };
     const next = quantity <= 0
       ? base.filter((l) => l.dishId !== dish.id)
       : base.some((l) => l.dishId === dish.id) ? base.map((l) => (l.dishId === dish.id ? line : l)) : [...base, line];
@@ -76,12 +81,15 @@ export function CartProvider({ userId, children }) {
     return 'ok';
   }, [lines, quantityOf]);
 
+  /** Keeps or removes the bottled water that comes with a meal line. */
+  const setWater = useCallback((dishId, on) => setLines((ls) => ls.map((l) => (l.dishId === dishId ? { ...l, water: on } : l))), []);
+
   const clear = useCallback(() => setLines([]), []);
   const count = lines.reduce((s, l) => s + l.quantity, 0);
 
   const value = useMemo(() => ({
-    lines, count, evaluation, evaluating, open, setOpen, bump, quantityOf, setQuantity, clear,
-  }), [lines, count, evaluation, evaluating, open, bump, quantityOf, setQuantity, clear]);
+    lines, count, evaluation, evaluating, open, setOpen, bump, quantityOf, setQuantity, setWater, clear,
+  }), [lines, count, evaluation, evaluating, open, bump, quantityOf, setQuantity, setWater, clear]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

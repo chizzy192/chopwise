@@ -45,13 +45,15 @@ const ROLES = [
   ['Admin', 'Approve dishes and their nutrition values, manage who is a caterer or admin, set VAT and the delivery fee, and read the daily report and the record of admin actions.'],
 ];
 
-// Example receipt: sample prices, VAT 7.5% on the subtotal, ₦500 delivery. Each meal comes with one
-// bottle of water at ₦0; yoghurt is an extra (it counts toward intake) and the extra water an add-on.
+// Example receipt: sample prices, VAT 7.5% on the subtotal, ₦500 delivery. Each meal comes with a
+// bottle of water at the standard price (₦300; it can be removed); yoghurt is an extra (it counts
+// toward intake) and the extra water an add-on.
 const RECEIPT = [
   ['Grilled fish and vegetables', 'meal', 1, 350000], ['Jollof rice and chicken', 'meal', 1, 250000],
   ['Yoghurt (1 cup)', 'extra', 1, 100000], ['Extra bottled water', 'add-on', 1, 30000],
 ];
-const SUBTOTAL = RECEIPT.reduce((s, [, , q, p]) => s + q * p, 0);
+const WATER = 30000;
+const SUBTOTAL = RECEIPT.reduce((s, [, type, q, p]) => s + q * p + (type === 'meal' ? q * WATER : 0), 0);
 const VAT = Math.floor((SUBTOTAL * 750 + 5000) / 10000);
 const FEE = 50000;
 
@@ -181,7 +183,7 @@ export default function Landing() {
             <ul className="receipt">
               {RECEIPT.flatMap(([name, type, q, p]) => [
                 <li key={name}><span>{q} × {name}{type !== 'meal' && <span className="hint"> ({type})</span>}</span><span className="tnum">{formatKobo(q * p)}</span></li>,
-                ...(type === 'meal' ? [<li key={`${name}-water`} className="included"><span>{q} × Bottled water (included)</span><span className="tnum">₦0</span></li>] : []),
+                ...(type === 'meal' ? [<li key={`${name}-water`} className="included"><span>{q} × Bottled water</span><span className="tnum">{formatKobo(q * WATER)}</span></li>] : []),
               ])}
             </ul>
             <dl className="breakdown">

@@ -47,6 +47,16 @@ const STEPS = [
      shown_at_delivered  INT          NOT NULL CHECK (shown_at_delivered >= 0),
      last_shown_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
    )`,
+  // Bottled water with each meal is charged at an admin-set price and can be removed per meal line.
+  'ALTER TABLE settings ADD COLUMN IF NOT EXISTS water_price NUMERIC(12,2) NOT NULL DEFAULT 300 CHECK (water_price BETWEEN 0 AND 100000)',
+  // Orders from before that change came with one free bottle per meal plate: record it at ₦0.
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order_items' AND column_name = 'water_quantity') THEN
+       ALTER TABLE order_items ADD COLUMN water_quantity INT NOT NULL DEFAULT 0 CHECK (water_quantity >= 0);
+       ALTER TABLE order_items ADD COLUMN water_unit_price_kobo INT NOT NULL DEFAULT 0 CHECK (water_unit_price_kobo >= 0);
+       UPDATE order_items SET water_quantity = quantity WHERE dish_type = 'meal';
+     END IF;
+   END $$`,
   // Dish photos live in the database, because the host's disk is wiped on every restart.
   `CREATE TABLE IF NOT EXISTS dish_photos (
      photo_id      UUID         PRIMARY KEY,

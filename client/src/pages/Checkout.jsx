@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { useCart } from '../cart.jsx';
+import { useCart, requestLines } from '../cart.jsx';
 import { Breakdown } from '../cartUi.jsx';
 import { formatKobo, PageHead, Loading, Empty, ErrorState } from '../components.jsx';
 
@@ -15,7 +15,7 @@ export default function Checkout() {
   async function pay() {
     setBusy(true); setError('');
     try {
-      const res = await api('/orders/checkout', { method: 'POST', body: { lines: cart.lines.map(({ dishId, quantity }) => ({ dishId, quantity })) } });
+      const res = await api('/orders/checkout', { method: 'POST', body: { lines: requestLines(cart.lines) } });
       // Paystack's own checkout page takes the payment; it sends the staff member back to /payment/return.
       window.location.assign(res.authorizationUrl);
     } catch (e) { setError(e.message); setBusy(false); }
@@ -41,12 +41,13 @@ export default function Checkout() {
                 <td className="num">{formatKobo(l.unitPriceKobo)}</td>
                 <td className="num">{formatKobo(l.lineTotalKobo)}</td>
               </tr>,
-              // Every meal comes with one bottle of water at no charge.
-              ...(l.included ?? []).map((w) => (
-                <tr key={`${l.dishId}-${w.name}`} className="included">
-                  <td>{w.name}</td><td className="num">{w.quantity}</td><td className="num">₦0</td><td className="num">₦0</td>
-                </tr>
-              )),
+              // The bottled water chosen with this meal (removable in the cart).
+              ...(l.water?.chosen ? [
+                <tr key={`${l.dishId}-water`} className="included">
+                  <td>{l.water.name}</td><td className="num">{l.water.quantity}</td>
+                  <td className="num">{formatKobo(l.water.unitPriceKobo)}</td><td className="num">{formatKobo(l.water.lineTotalKobo)}</td>
+                </tr>,
+              ] : []),
             ])}
           </tbody>
         </table>

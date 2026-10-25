@@ -61,6 +61,8 @@ const cartLine = z.strictObject({
   dishId: id('Choose a dish'),
   quantity: z.number({ error: 'Enter a quantity' }).int({ error: 'Quantities are whole numbers' })
     .min(1, { error: 'Quantities start at 1' }).max(MAX_QUANTITY, { error: `You can order at most ${MAX_QUANTITY} plates of one dish per order` }),
+  // Bottled water with a meal line: on unless false (ignored for extras and add-ons).
+  water: z.boolean({ error: 'Say whether to add bottled water' }).optional(),
 });
 export const cartBody = z.strictObject({
   lines: z.array(cartLine, { error: 'Send the cart lines' }).max(30, { error: 'A cart can hold at most 30 dishes' })
@@ -183,6 +185,10 @@ export const settingsBody = z.strictObject({
   deliveryFee: z.number({ error: 'Delivery fee must be a number' })
     .min(0, { error: 'Delivery fee must be ₦0 or more' }).max(1_000_000, { error: 'Delivery fee must be ₦1,000,000 or less' })
     .refine(twoDecimals, { error: 'Use at most 2 decimal places for the delivery fee' }),
+  // Optional, so a request that leaves it out keeps the current price.
+  waterPrice: z.number({ error: 'Bottled water price must be a number' })
+    .min(0, { error: 'Bottled water price must be ₦0 or more' }).max(100_000, { error: 'Bottled water price must be ₦100,000 or less' })
+    .refine(twoDecimals, { error: 'Use at most 2 decimal places for the bottled water price' }).optional(),
 });
 
 export const auditQuery = z.strictObject({

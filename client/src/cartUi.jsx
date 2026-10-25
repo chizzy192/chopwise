@@ -116,7 +116,7 @@ export function CartSheet() {
                       <FitBadge fit={l.fit} why={l.why} dishName={l.name} />
                       {l.stockLabel && <span className="pill wait">{l.stockLabel}</span>}
                     </div>
-                    {l.included?.map((w) => <p key={w.name} className="hint included">{w.quantity} × {w.name} ₦0</p>)}
+                    {l.type === 'meal' && <WaterSwitch line={l} />}
                   </div>
                   <div className="cart-line-end">
                     <AddToCartControl dish={l} />
@@ -152,7 +152,26 @@ export function CartSheet() {
 
 const TYPE_NOTE = { extra: ' (extra)', addon: ' (add-on)' };
 
-// Order lines as the server sent them. Each meal line is followed by its free bottle of water.
+// The bottled water that comes with a meal line (CLAUDE.md item 6): on by default, charged at the
+// admin's price per plate, and removable. The price comes from the server's cart check.
+function WaterSwitch({ line }) {
+  const cart = useCart();
+  const on = cart.lines.find((l) => l.dishId === line.id)?.water !== false;
+  // Priced once the server has checked the cart; until then the line only knows on or off.
+  const w = line.water && typeof line.water === 'object' ? line.water : null;
+  return (
+    <label className="switch water-switch">
+      <input type="checkbox" role="switch" checked={on} onChange={(e) => cart.setWater(line.id, e.target.checked)}
+        aria-label={`Bottled water with ${line.name}`} />
+      <span>
+        Bottled water{w ? <span className="tnum"> {formatKobo(w.unitPriceKobo)} × {w.quantity}</span> : ''}
+        {w && <span className="tnum water-total">{on ? formatKobo(w.lineTotalKobo) : 'Removed'}</span>}
+      </span>
+    </label>
+  );
+}
+
+// Order lines as the server sent them. Each meal line is followed by the water bought with it.
 export function ReceiptLines({ items, prices = true }) {
   return (
     <ul className="receipt">
@@ -161,11 +180,11 @@ export function ReceiptLines({ items, prices = true }) {
           <span>{i.quantity} × {i.name}{TYPE_NOTE[i.type] && <span className="hint">{TYPE_NOTE[i.type]}</span>}</span>
           {prices && <span className="tnum">{formatKobo(i.lineTotalKobo)}</span>}
         </li>,
-        ...(i.included ?? []).map((w) => (
-          <li key={`${i.dishId}-${w.name}`} className="included">
-            <span>{w.quantity} × {w.name}</span>{prices && <span className="tnum">₦0</span>}
-          </li>
-        )),
+        ...(i.water && i.water.chosen !== false ? [
+          <li key={`${i.dishId}-water`} className="included">
+            <span>{i.water.quantity} × {i.water.name}</span>{prices && <span className="tnum">{formatKobo(i.water.lineTotalKobo)}</span>}
+          </li>,
+        ] : []),
       ])}
     </ul>
   );

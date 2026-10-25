@@ -105,6 +105,9 @@ CREATE TABLE order_items (
   unit_price_kobo INT          NOT NULL CHECK (unit_price_kobo > 0),
   quantity        INT          NOT NULL CHECK (quantity BETWEEN 1 AND 2),  -- at most 2 plates per dish per order
   line_total_kobo INT          NOT NULL,
+  -- Bottled water bought with this meal line (one per plate, or none if removed), at the price then.
+  water_quantity        INT    NOT NULL DEFAULT 0 CHECK (water_quantity >= 0),
+  water_unit_price_kobo INT    NOT NULL DEFAULT 0 CHECK (water_unit_price_kobo >= 0),
   carb_percent    NUMERIC(5,2),
   protein_percent NUMERIC(5,2),
   fat_percent     NUMERIC(5,2),
@@ -176,6 +179,8 @@ CREATE TABLE settings (
   setting_id   SMALLINT      PRIMARY KEY DEFAULT 1 CHECK (setting_id = 1),
   vat_rate     NUMERIC(5,2)  NOT NULL CHECK (vat_rate BETWEEN 0 AND 100),
   delivery_fee NUMERIC(12,2) NOT NULL CHECK (delivery_fee >= 0),
+  -- Price of the bottle of water offered with each meal (CLAUDE.md item 6), in naira.
+  water_price  NUMERIC(12,2) NOT NULL DEFAULT 300 CHECK (water_price BETWEEN 0 AND 100000),
   updated_by   INT           REFERENCES users(user_id) ON DELETE SET NULL,
   updated_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );

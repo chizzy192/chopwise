@@ -91,8 +91,8 @@ async function approvedDishes(ids, db) {
 }
 
 async function checkoutSettings(db) {
-  const { rows } = await db.query('SELECT vat_rate, delivery_fee FROM settings WHERE setting_id = 1');
-  return { vatRate: rows[0].vat_rate, deliveryFeeKobo: nairaToKobo(rows[0].delivery_fee) };
+  const { rows } = await db.query('SELECT vat_rate, delivery_fee, water_price FROM settings WHERE setting_id = 1');
+  return { vatRate: rows[0].vat_rate, deliveryFeeKobo: nairaToKobo(rows[0].delivery_fee), waterPriceKobo: nairaToKobo(rows[0].water_price) };
 }
 
 /**
@@ -133,7 +133,7 @@ export async function evaluateCartFor(userId, checkin, lines, date, db = pool) {
   const fitById = new Map(engine.lines.map((l) => [l.mealId, l]));
   const pricing = priceCart(known.map((l) => {
     const d = dishes.get(l.dishId);
-    return { dishId: d.id, name: d.name, type: d.type, quantity: l.quantity, unitPriceKobo: d.priceKobo };
+    return { dishId: d.id, name: d.name, type: d.type, quantity: l.quantity, unitPriceKobo: d.priceKobo, water: l.water };
   }), await checkoutSettings(db));
   return {
     lines: pricing.lines.map((l) => {
@@ -181,9 +181,10 @@ export async function createPendingOrder(user, lines, date) {
       const d = cart.dishes.get(l.dishId);
       await db.query(
         `INSERT INTO order_items (order_id, meal_id, dish_type, name, unit_price_kobo, quantity, line_total_kobo,
-           carb_percent, protein_percent, fat_percent, vitamin_percent, mineral_percent)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [rows[0].order_id, d.id, d.type, d.name, l.unitPriceKobo, l.quantity, l.lineTotalKobo, ...FOOD_CLASSES.map((c) => d[c])],
+           carb_percent, protein_percent, fat_percent, vitamin_percent, mineral_percent, water_quantity, water_unit_price_kobo)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [rows[0].order_id, d.id, d.type, d.name, l.unitPriceKobo, l.quantity, l.lineTotalKobo, ...FOOD_CLASSES.map((c) => d[c]),
+          l.water?.chosen ? l.water.quantity : 0, l.water?.chosen ? l.water.unitPriceKobo : 0],
       );
     }
     return { order: rows[0], cart };

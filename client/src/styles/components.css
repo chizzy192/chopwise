@@ -287,3 +287,8 @@ label.file-button:focus-within { outline: 2px solid var(--accent); outline-offse
 /* Close (✕) in the top-right corner of a pop-up; the heading leaves room for it. */
 .modal-close { position: absolute; inset-block-start: var(--space-3); inset-inline-end: var(--space-3); }
 .modal:has(.modal-close) > h2 { padding-inline-end: calc(var(--tap) + var(--space-2)); }
+
+/* Bottled water under a meal in the cart: a switch with its price (removable). */
+.water-switch { margin-top: var(--space-1); font-size: var(--text-meta); }
+.water-switch > span { display: inline-flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); align-items: baseline; }
+.water-total { color: var(--ink); font-weight: 500; }

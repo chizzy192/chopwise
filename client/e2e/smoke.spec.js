@@ -55,7 +55,7 @@ test('landing: explains ChopWise, runs the gate demo, and links to log in and si
   await expect(why.locator('.term-tip')).toHaveText('Technical name: Caution');
   await expect(why.locator('.term-tip')).toBeVisible();
   await expect(page.locator('.example-receipt')).toContainText('Yoghurt (1 cup) (extra)');
-  await expect(page.locator('.example-receipt')).toContainText('Bottled water (included)');
+  await expect(page.locator('.example-receipt')).toContainText('1 × Bottled water₦300.00');
   await why.click();
   await expect(page.getByText('Guidance, not medical advice.').first()).toBeVisible();
   await page.keyboard.press('Escape');
@@ -208,7 +208,17 @@ test('staff: order page, dish detail, cart sheet, checkout and payment', async (
   await cart.click();
   const sheet = page.getByRole('dialog', { name: 'Your cart' });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByText('1 × Bottled water (included) ₦0')).toBeVisible();
+  // A bottle of water comes with the meal at the standard price; it can be removed and added back.
+  const water = sheet.getByRole('switch', { name: `Bottled water with ${dishName}` });
+  await expect(water).toBeChecked();
+  await expect(sheet.locator('.water-switch')).toContainText('₦300.00 × 1');
+  const subtotal = () => sheet.locator('.breakdown div').first().locator('dd').textContent();
+  const withWater = await subtotal();
+  await water.uncheck();
+  await expect(sheet.locator('.water-switch')).toContainText('Removed');
+  await expect.poll(subtotal, { message: 'removing the water lowers the subtotal' }).not.toBe(withWater);
+  await water.check();
+  await expect.poll(subtotal).toBe(withWater);
   const toCheckout = sheet.getByRole('button', { name: 'Go to checkout' });
   await expectClickable(toCheckout);
   await expectClickable(sheet.getByRole('button', { name: 'Close' }));
@@ -217,7 +227,8 @@ test('staff: order page, dish detail, cart sheet, checkout and payment', async (
   const pay = page.getByRole('button', { name: /^Pay .+ with Paystack$/ });
   await expectClickable(pay);
   await expectTouchTargets(page);
-  await expect(page.locator('tr.included')).toContainText('Bottled water (included)');
+  await expect(page.locator('tr.included')).toContainText('Bottled water');
+  await expect(page.locator('tr.included')).toContainText('₦300.00');
   await pay.click(); // mock Paystack completes the payment and sends the browser back
   await expect(page.getByRole('heading', { name: /paid/i })).toBeVisible();
   await expect(page.locator('.delivery-code')).toHaveText(/^\d{4}$/);
@@ -514,6 +525,8 @@ test('admin: meal approval, users, settings, audit log and report', async ({ pag
   await page.goto('/admin/settings');
   await expectClickable(page.getByLabel('VAT rate (%)'));
   await expectClickable(page.getByLabel('Delivery fee (₦)'));
+  await expectClickable(page.getByLabel('Bottled water with each meal (₦)'));
+  await expect(page.getByLabel('Bottled water with each meal (₦)')).toHaveValue('300');
   await expectClickable(page.getByRole('button', { name: 'Save settings' }));
   await page.goto('/admin/audit');
   await expect(page.getByRole('heading', { name: 'Audit log' })).toBeVisible();

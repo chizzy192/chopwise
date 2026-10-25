@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createHmac, randomBytes } from 'node:crypto';
 import {
   vatKobo, priceCart, nairaToKobo, platesLeft, unavailableReason, stockLabel, cartProblems, checkPayment,
-  webhookSignatureValid, nextStatus, canAdvance, afterWrongCode, MAX_CODE_ATTEMPTS, includedWith, INCLUDED_WATER,
+  webhookSignatureValid, nextStatus, canAdvance, afterWrongCode, MAX_CODE_ATTEMPTS, waterFor, WATER_NAME,
 } from '../src/logic/checkout.js';
 import { todayInLagos } from '../src/logic/time.js';
 import { newDeliveryCode, hashCode, codeMatches, encryptCode, decryptCode } from '../src/services/deliveryCode.js';
@@ -163,18 +163,30 @@ test('at most 2 plates of one dish per order (enforced by the server)', async ()
   assert.equal(three.error.issues[0].message, 'You can order at most 2 plates of one dish per order');
 });
 
-test('every meal comes with one bottle of water at ₦0; extras and add-ons do not', () => {
+test('each meal line comes with bottled water at the admin\'s price, one per plate, and it can be removed', () => {
+  const settings = { vatRate: 7.5, deliveryFeeKobo: 0, waterPriceKobo: 30_000 }; // water ₦300
   const b = priceCart([
     { dishId: 1, type: 'meal', unitPriceKobo: 250_000, quantity: 2 },
     { dishId: 2, type: 'extra', unitPriceKobo: 100_000, quantity: 1 }, // Yoghurt
     { dishId: 3, type: 'addon', unitPriceKobo: 30_000, quantity: 1 }, // Extra bottled water
-  ], { vatRate: 7.5, deliveryFeeKobo: 0 });
-  assert.deepEqual(b.lines[0].included, [{ name: INCLUDED_WATER, quantity: 2, unitPriceKobo: 0, lineTotalKobo: 0 }]);
-  assert.equal(INCLUDED_WATER, 'Bottled water (included)');
-  assert.deepEqual(b.lines[1].included, []);
-  assert.deepEqual(b.lines[2].included, []);
-  assert.equal(b.subtotalKobo, 500_000 + 100_000 + 30_000, 'the included water adds nothing to the price');
-  assert.deepEqual(includedWith({ type: 'addon', quantity: 1 }), []);
+  ], settings);
+  assert.deepEqual(b.lines[0].water, { name: WATER_NAME, chosen: true, quantity: 2, unitPriceKobo: 30_000, lineTotalKobo: 60_000 });
+  assert.equal(b.lines[1].water, null, 'extras come without water');
+  assert.equal(b.lines[2].water, null, 'add-ons come without water');
+  assert.equal(b.subtotalKobo, 500_000 + 60_000 + 100_000 + 30_000, 'the water is in the subtotal');
+  assert.equal(b.vatKobo, vatKobo(690_000, 7.5), 'and VAT applies to it');
+
+  const without = priceCart([{ dishId: 1, type: 'meal', unitPriceKobo: 250_000, quantity: 2, water: false }], settings);
+  assert.deepEqual(without.lines[0].water, { name: WATER_NAME, chosen: false, quantity: 2, unitPriceKobo: 30_000, lineTotalKobo: 0 });
+  assert.equal(without.subtotalKobo, 500_000, 'removed water costs nothing');
+  assert.equal(waterFor({ type: 'addon', quantity: 1 }, 30_000), null);
+});
+
+test('the cart request can turn water off per line; anything but true/false is refused', async () => {
+  const { cartBody } = await import('../src/http/schemas.js');
+  assert.equal(cartBody.parse({ lines: [{ dishId: 1, quantity: 1, water: false }] }).lines[0].water, false);
+  assert.equal(cartBody.parse({ lines: [{ dishId: 1, quantity: 1 }] }).lines[0].water, undefined, 'left out means water stays');
+  assert.equal(cartBody.safeParse({ lines: [{ dishId: 1, quantity: 1, water: 'no' }] }).success, false);
 });
 
 test('a cart of only an extra still needs a meal', () => {

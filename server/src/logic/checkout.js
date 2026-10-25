@@ -36,20 +36,23 @@ export function vatKobo(subtotalKobo, ratePercent) {
   return Math.floor((subtotalKobo * basisPoints + 5000) / 10000);
 }
 
-// Every meal comes with one bottle of water at no charge (CLAUDE.md item 6). It has no RDI values
+// Each meal line comes with one bottle of water per plate (CLAUDE.md item 6), charged at the
+// admin's water price. Staff can remove it for any meal line (water: false). It has no RDI values
 // and is not stock-tracked. Extras and add-ons don't come with water.
-export const INCLUDED_WATER = 'Bottled water (included)';
-export function includedWith({ type, quantity }) {
-  return type === 'meal' ? [{ name: INCLUDED_WATER, quantity, unitPriceKobo: 0, lineTotalKobo: 0 }] : [];
+export const WATER_NAME = 'Bottled water';
+export function waterFor({ type, quantity, water }, waterPriceKobo) {
+  if (type !== 'meal') return null;
+  const chosen = water !== false;
+  return { name: WATER_NAME, chosen, quantity, unitPriceKobo: waterPriceKobo, lineTotalKobo: chosen ? waterPriceKobo * quantity : 0 };
 }
 
 /**
- * The checkout breakdown. VAT applies to the subtotal (meals, extras and add-ons) only, never to the
- * delivery fee. deliveryFeeKobo is already in kobo.
+ * The checkout breakdown. The subtotal is every line plus the water chosen with meals. VAT applies
+ * to the subtotal only, never to the delivery fee. Amounts are whole kobo.
  */
-export function priceCart(lines, { vatRate, deliveryFeeKobo }) {
-  const priced = lines.map((l) => ({ ...l, lineTotalKobo: l.unitPriceKobo * l.quantity, included: includedWith(l) }));
-  const subtotalKobo = priced.reduce((s, l) => s + l.lineTotalKobo, 0);
+export function priceCart(lines, { vatRate, deliveryFeeKobo, waterPriceKobo = 0 }) {
+  const priced = lines.map((l) => ({ ...l, lineTotalKobo: l.unitPriceKobo * l.quantity, water: waterFor(l, waterPriceKobo) }));
+  const subtotalKobo = priced.reduce((s, l) => s + l.lineTotalKobo + (l.water?.lineTotalKobo ?? 0), 0);
   const vat = vatKobo(subtotalKobo, vatRate);
   return {
     lines: priced,

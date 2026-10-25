@@ -23,7 +23,7 @@ import { initializeTransaction, verifyTransaction } from './services/paystack.js
 import { decryptCode, codeMatches } from './services/deliveryCode.js';
 import { clientOrigin } from './config.js';
 import {
-  PAID_STATUSES, nextStatus, canAdvance, afterWrongCode, MAX_CODE_ATTEMPTS, platesLeft, stockLabel, includedWith,
+  PAID_STATUSES, nextStatus, canAdvance, afterWrongCode, MAX_CODE_ATTEMPTS, platesLeft, stockLabel,
 } from './logic/checkout.js';
 import {
   healthProfile, rowToProfile, todayCheckin, ordersOn, prefillFromHistory, mealsById,
@@ -343,7 +343,10 @@ function orderView(r, items, { forStaff = false, forCaterer = false } = {}) {
     deliveryCode: forStaff && awaitingDelivery && r.code_encrypted ? decryptCode(r.code_encrypted) : null,
     items: items.map((i) => ({
       dishId: i.meal_id, name: i.name, type: i.dish_type, quantity: i.quantity, unitPriceKobo: i.unit_price_kobo, lineTotalKobo: i.line_total_kobo,
-      included: includedWith({ type: i.dish_type, quantity: i.quantity }),
+      // Water bought with this meal line, as stored on the order (₦0 for orders from before it was charged).
+      water: i.water_quantity > 0
+        ? { name: 'Bottled water', quantity: i.water_quantity, unitPriceKobo: i.water_unit_price_kobo, lineTotalKobo: i.water_quantity * i.water_unit_price_kobo }
+        : null,
     })),
     breakdown: {
       subtotalKobo: r.subtotal_kobo, vatRate: r.vat_rate, vatKobo: r.vat_kobo, deliveryFeeKobo: r.delivery_fee_kobo, totalKobo: r.total_kobo,
@@ -889,7 +892,7 @@ async function report(_req, res) {
 }
 
 const settingsRow = (r) => ({
-  vatRate: r.vat_rate, deliveryFee: r.delivery_fee, updatedAt: r.updated_at, updatedBy: r.updated_by_name ?? null,
+  vatRate: r.vat_rate, deliveryFee: r.delivery_fee, waterPrice: r.water_price, updatedAt: r.updated_at, updatedBy: r.updated_by_name ?? null,
 });
 
 async function getSettings(_req, res) {
@@ -902,14 +905,18 @@ async function getSettings(_req, res) {
 async function putSettings(req, res) {
   const { vatRate, deliveryFee } = req.valid.body;
   const row = await inTransaction(async (db) => {
-    const before = (await db.query('SELECT vat_rate, delivery_fee FROM settings WHERE setting_id = 1 FOR UPDATE')).rows[0];
+    const before = (await db.query('SELECT vat_rate, delivery_fee, water_price FROM settings WHERE setting_id = 1 FOR UPDATE')).rows[0];
+    const waterPrice = req.valid.body.waterPrice ?? before.water_price;
     const { rows } = await db.query(
-      `UPDATE settings SET vat_rate = $1, delivery_fee = $2, updated_by = $3, updated_at = NOW()
-       WHERE setting_id = 1 RETURNING *`, [vatRate, deliveryFee, req.user.id],
+      `UPDATE settings SET vat_rate = $1, delivery_fee = $2, water_price = $3, updated_by = $4, updated_at = NOW()
+       WHERE setting_id = 1 RETURNING *`, [vatRate, deliveryFee, waterPrice, req.user.id],
     );
     await audit({
       actorId: req.user.id, action: 'settings.updated', targetType: 'settings', targetId: 1,
-      details: { from: { vatRate: before.vat_rate, deliveryFee: before.delivery_fee }, to: { vatRate, deliveryFee } },
+      details: {
+        from: { vatRate: before.vat_rate, deliveryFee: before.delivery_fee, waterPrice: before.water_price },
+        to: { vatRate, deliveryFee, waterPrice },
+      },
     }, db);
     return rows[0];
   });

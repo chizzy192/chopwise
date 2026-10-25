@@ -482,11 +482,12 @@ record('T45', 'Full order: cart → checkout → payment → preparing → out f
 
 // T46: the breakdown, worked out independently here from the settings and the menu prices.
 const settings = (await call('/admin/settings', { cookie: admin })).data;
-const subtotal = fish.priceKobo + water.priceKobo;
+const waterPriceKobo = Math.round(settings.waterPrice * 100); // the bottle that comes with the fish
+const subtotal = fish.priceKobo + waterPriceKobo + water.priceKobo;
 const vat = Math.floor((subtotal * Math.round(settings.vatRate * 100) + 5000) / 10000);
 const fee = Math.round(settings.deliveryFee * 100);
 const b = verified.data.order.breakdown;
-record('T46', 'Checkout breakdown in kobo', `${naira(fish.priceKobo)} + ${naira(water.priceKobo)}, VAT ${settings.vatRate}%, delivery ${naira(fee)}`,
+record('T46', 'Checkout breakdown in kobo', `${naira(fish.priceKobo)} + bottled water ${naira(waterPriceKobo)} + ${naira(water.priceKobo)}, VAT ${settings.vatRate}%, delivery ${naira(fee)}`,
   'Server totals match: subtotal + VAT (on the subtotal only) + delivery fee',
   `Subtotal ${naira(b.subtotalKobo)}, VAT ${naira(b.vatKobo)}, delivery ${naira(b.deliveryFeeKobo)}, total ${naira(b.totalKobo)}; Paystack charged ${naira(paystack.get(co.data.reference).amount)}`,
   b.subtotalKobo === subtotal && b.vatKobo === vat && b.deliveryFeeKobo === fee && b.totalKobo === subtotal + vat + fee
@@ -641,20 +642,36 @@ record('T64', 'Extras count toward intake; add-ons never do', 'Balanced lunch bo
   yogMenu?.fit === 'Balanced' && bought64.order?.status === 'paid' && JSON.stringify(rose) === JSON.stringify(expect64)
     && yogOnly.canCheckout === false && yogOnly.problems?.[0]?.message === 'Add at least one meal to your cart' && yogThree.status === 400);
 
-// T65: every meal comes with a free bottle of water, on the cart and on the receipt.
-const lunchLine = (await call('/cart/evaluate', { method: 'POST', cookie: newStaff, body: { lines: [{ dishId: lunch.id, quantity: 2 }, { dishId: yoghurt.id, quantity: 1 }] } })).data;
+// T65: each meal line comes with bottled water at the admin's price; it can be removed per line.
+const waterKobo65 = Math.round((await call('/admin/settings', { cookie: admin })).data.waterPrice * 100);
+const withWater = (await call('/cart/evaluate', { method: 'POST', cookie: newStaff, body: { lines: [{ dishId: lunch.id, quantity: 2 }, { dishId: yoghurt.id, quantity: 1 }] } })).data;
+const noWater = (await call('/cart/evaluate', { method: 'POST', cookie: newStaff, body: { lines: [{ dishId: lunch.id, quantity: 2, water: false }, { dishId: yoghurt.id, quantity: 1 }] } })).data;
 const receipt = bought64.order;
-const included = (l) => l?.included?.map((i) => `${i.name} × ${i.quantity} ${naira(i.lineTotalKobo)}`).join(', ') || 'none';
+const waterText = (l) => (l?.water ? `${l.water.quantity} × ${l.water.name} ${naira(l.water.lineTotalKobo)}${l.water.chosen === false ? ' (removed)' : ''}` : 'none');
 const catererReceipt = (await call('/caterer/orders', { cookie: caterer })).data.find((o) => o.id === receipt?.id);
-record('T65', 'Free bottled water with every meal', '2 × Balanced lunch bowl + Yoghurt in the cart; the receipt of T64',
-  '"Bottled water (included)" at ₦0 per meal plate, on the cart and the receipt; none for extras or add-ons; price unchanged',
-  `Cart: lunch → ${included(lunchLine.lines[0])}, yoghurt → ${included(lunchLine.lines[1])}; receipt: ${receipt?.items.map((i) => `${i.name} → ${included(i)}`).join('; ')}; caterer sees ${included(catererReceipt?.items[0])}`,
-  lunchLine.lines[0].included?.[0]?.name === 'Bottled water (included)' && lunchLine.lines[0].included[0].quantity === 2
-    && lunchLine.lines[0].included[0].lineTotalKobo === 0 && lunchLine.lines[1].included.length === 0
-    && lunchLine.breakdown.subtotalKobo === lunch.priceKobo * 2 + yoghurt.priceKobo
-    && receipt?.items.filter((i) => i.type === 'meal').every((i) => i.included[0]?.name === 'Bottled water (included)')
-    && receipt?.items.filter((i) => i.type !== 'meal').every((i) => i.included.length === 0)
-    && catererReceipt?.items.some((i) => i.included.length === 1));
+record('T65', 'Bottled water with each meal, charged and removable', '2 × Balanced lunch bowl + Yoghurt, with and without the water; the receipt of T64',
+  'Water at the admin price per meal plate, in the subtotal; removing it takes it off; none for extras; the receipt keeps what was bought',
+  `Water price ${naira(waterKobo65)}. With: lunch → ${waterText(withWater.lines[0])}, yoghurt → ${waterText(withWater.lines[1])}, subtotal ${naira(withWater.breakdown.subtotalKobo)}; without: ${waterText(noWater.lines[0])}, subtotal ${naira(noWater.breakdown.subtotalKobo)}; receipt: ${receipt?.items.map((i) => `${i.name} → ${waterText(i)}`).join('; ')}; caterer sees ${waterText(catererReceipt?.items[0])}`,
+  waterKobo65 > 0 && withWater.lines[0].water?.chosen === true && withWater.lines[0].water.quantity === 2
+    && withWater.lines[0].water.lineTotalKobo === waterKobo65 * 2 && withWater.lines[1].water === null
+    && withWater.breakdown.subtotalKobo === lunch.priceKobo * 2 + waterKobo65 * 2 + yoghurt.priceKobo
+    && noWater.lines[0].water?.chosen === false && noWater.breakdown.subtotalKobo === lunch.priceKobo * 2 + yoghurt.priceKobo
+    && receipt?.items.filter((i) => i.type === 'meal').every((i) => i.water?.lineTotalKobo === waterKobo65 * i.quantity)
+    && receipt?.items.filter((i) => i.type !== 'meal').every((i) => i.water === null)
+    && catererReceipt?.items.some((i) => i.water?.quantity === 1));
+
+// T76: the admin sets the water price; checkout uses the new price; audited.
+const before76 = (await call('/admin/settings', { cookie: admin })).data;
+const set76 = await call('/admin/settings', { method: 'PUT', cookie: admin, body: { vatRate: before76.vatRate, deliveryFee: before76.deliveryFee, waterPrice: 250 } });
+const priced76 = (await call('/cart/evaluate', { method: 'POST', cookie: newStaff, body: { lines: [{ dishId: lunch.id, quantity: 1 }] } })).data;
+const log76 = (await call('/admin/audit-log', { cookie: admin })).data.find((e) => e.action === 'settings.updated');
+const badWater = await call('/admin/settings', { method: 'PUT', cookie: admin, body: { vatRate: before76.vatRate, deliveryFee: before76.deliveryFee, waterPrice: -5 } });
+await call('/admin/settings', { method: 'PUT', cookie: admin, body: { vatRate: before76.vatRate, deliveryFee: before76.deliveryFee, waterPrice: before76.waterPrice } });
+record('T76', 'Admin sets the bottled water price', `Water price ${naira(before76.waterPrice * 100)} → ₦250; then -₦5`,
+  'Saved, used at checkout and audited; a negative price is refused',
+  `Saved ${naira((set76.data?.waterPrice ?? 0) * 100)}; cart water ${naira(priced76.lines?.[0]?.water?.unitPriceKobo ?? 0)}; log ${log76?.action} (${JSON.stringify(log76?.details.to)}); -₦5 HTTP ${badWater.status}`,
+  set76.status === 200 && set76.data.waterPrice === 250 && priced76.lines[0].water.unitPriceKobo === 25_000
+    && log76?.details.to.waterPrice === 250 && badWater.status === 400);
 
 // T59: today's revenue, paid and cancelled orders on the admin report.
 const reportNow = (await call('/admin/report', { cookie: admin })).data;
